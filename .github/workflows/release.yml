@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller==6.11.1 pytest
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Fetch FFmpeg
+        run: python tools/fetch_ffmpeg.py
+
+      - name: Build FrameKeep.exe
+        run: pyinstaller --noconfirm framekeep.spec
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\FrameKeep.exe -ArgumentList "--version" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/FrameKeep.exe
+          generate_release_notes: true

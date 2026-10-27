@@ -1,0 +1,56 @@
+name: FFmpeg
+
+# Builds the minimal FFmpeg bundled in FrameKeep.exe (tools/build_ffmpeg.sh) and publishes it as a release asset.
+# After a run, point tools/fetch_ffmpeg.py at the new asset and its SHA-256 (printed in the job log).
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the zip as a GitHub release (otherwise only a workflow artifact)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+
+      - name: Build FFmpeg
+        run: bash tools/build_ffmpeg.sh --deps build/ffmpeg
+
+      - name: Find zip
+        id: zip
+        run: |
+          zip=$(ls build/ffmpeg/dist/framekeep-ffmpeg-*.zip)
+          name=$(basename "$zip" .zip)
+          echo "path=$zip" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "tag=${name%-win64}" | sed 's/^tag=framekeep-/tag=/' >> "$GITHUB_OUTPUT"
+          sha256sum "$zip" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.name }}
+          path: ${{ steps.zip.outputs.path }}
+
+      - name: Publish release
+        if: inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.zip.outputs.tag }}
+          name: FFmpeg for FrameKeep (${{ steps.zip.outputs.tag }})
+          body: Minimal FFmpeg built by tools/build_ffmpeg.sh for FrameKeep.exe. See BUILDINFO.txt in the zip.
+          files: ${{ steps.zip.outputs.path }}

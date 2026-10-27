@@ -1,0 +1,12 @@
+# FFmpeg is downloaded by tools/fetch_ffmpeg.py (binaries don't belong in git)
+ffmpeg/*.exe
+ffmpeg/*.dll
+ffmpeg/VERSION
+ffmpeg/BUILDINFO.txt
+
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+dist-new/
