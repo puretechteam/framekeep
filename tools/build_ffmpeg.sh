@@ -22,7 +22,7 @@ FK_REV=fk3   # bump when the configure line or a library changes without a new F
 
 if [ "${1:-}" = "--deps" ]; then
     shift
-    pacman -S --needed --noconfirm make git diffutils tar zip vim \
+    pacman -S --needed --noconfirm make git diffutils patch tar zip vim \
         mingw-w64-ucrt-x86_64-{gcc,nasm,pkgconf,cmake,ninja,meson} \
         mingw-w64-ucrt-x86_64-{x264,x265,svt-av1,aom,dav1d,SDL2,libvpl,amf-headers,ffnvcodec-headers}
 fi
