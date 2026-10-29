@@ -32,7 +32,9 @@ class LogsPage(ctk.CTkFrame):
         for name, color in TAG_COLORS.items():
             self.text.tag_config(name, foreground=color)
         self.text.configure(state="disabled")
-        logmod.subscribe(lambda *line: self.app.ui_queue.put(lambda: self._append(*line)))
+        self._listener = lambda *line: self.app.ui_queue.put(lambda: self._append(*line))
+        logmod.subscribe(self._listener)
+        self.bind("<Destroy>", lambda e: e.widget is self and logmod.unsubscribe(self._listener))  # the window closes to the tray
 
     def _append(self, stamp, tag, msg, color):
         if not self.winfo_exists():

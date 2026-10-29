@@ -70,6 +70,23 @@ def apply_theme():
     t["CTkScrollableFrame"]["label_fg_color"] = pair(CARD)
     t["DropdownMenu"].update(fg_color=pair(CARD_HI), hover_color=pair(BORDER), text_color=pair(TEXT))
     t["CTkFont"].update(family="Segoe UI Variable Text", size=13)  # already resolved to this platform's entry
+    quiet_trackers()
+
+def quiet_trackers():
+    """CustomTkinter polls the Windows light/dark setting every 30 ms while a window is open, and display scaling
+    every 100 ms. FrameKeep is always dark, so the first poll is never started, and scaling is checked once a
+    second (moving the window to a screen with different scaling still re-scales it)."""
+    ctk.AppearanceModeTracker.update_loop_running = True
+    ctk.ScalingTracker.update_loop_interval = 1000
+
+def release_trackers():
+    """Forget the destroyed window. CustomTkinter's trackers keep a reference to every window ever created,
+    which kept each closed window's whole Tcl interpreter alive (~2 MB per open/close)."""
+    ctk.AppearanceModeTracker.app_list.clear()
+    ctk.AppearanceModeTracker.callback_list.clear()
+    ctk.ScalingTracker.window_widgets_dict.clear()
+    ctk.ScalingTracker.window_dpi_scaling_dict.clear()
+    ctk.ScalingTracker.update_loop_running = False
 
 def font(size=13, weight="normal", display=False):
     return ctk.CTkFont(family="Segoe UI Variable Display" if display else "Segoe UI Variable Text", size=size, weight=weight)
@@ -108,10 +125,24 @@ def icon(name, size=18, color=TEXT):
             d.text(((px - (box[2] - box[0])) / 2 - box[0], (px - (box[3] - box[1])) / 2 - box[1]), ch, font=f, fill=color)
     return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
 
+_UNSET = object()
+
+def update(widget, **kw):
+    """configure() only the options that changed. CustomTkinter redraws a widget on every configure() call, even
+    with identical values, and the status refresh runs twice a second."""
+    last = widget.__dict__.setdefault("_fk_applied", {})
+    changed = {k: v for k, v in kw.items() if last.get(k, _UNSET) != v}
+    if changed:
+        widget.configure(**changed)
+        last.update(changed)
+
 def set_progress(bar, value, color=ACCENT):
     """CTkProgressBar draws a dot at 0; hide it by matching the track color."""
-    bar.configure(progress_color=color if value > 0 else BORDER)
-    bar.set(value)
+    update(bar, progress_color=color if value > 0 else BORDER)
+    value = round(value, 3)
+    if bar.__dict__.get("_fk_value") != value:
+        bar._fk_value = value
+        bar.set(value)
 
 def shorten(path, limit=70):
     return path if len(path) <= limit else path[:limit // 2 - 2] + "…" + path[-(limit // 2 - 1):]
@@ -135,8 +166,8 @@ class Pill(ctk.CTkFrame):
         self.label.pack(side="left", padx=(0, 12), pady=5)
 
     def set(self, text, color):
-        self.dot.configure(image=icon("dot", 14, color))
-        self.label.configure(text=text)
+        update(self.dot, image=icon("dot", 14, color))
+        update(self.label, text=text)
 
 class Badge(ctk.CTkLabel):
     def __init__(self, master, text, color=MUTED, **kw):
@@ -152,12 +183,12 @@ class StatTile(Card):
         ctk.CTkLabel(top, text=title.upper(), font=font(11, "bold"), text_color=MUTED).pack(side="left", padx=8)
         self.value = ctk.CTkLabel(self, text="-", font=font(24, "bold", display=True), anchor="w")
         self.value.pack(fill="x", padx=16, pady=(4, 0))
-        self.sub = ctk.CTkLabel(self, text="", font=font(12), text_color=MUTED, anchor="w")
+        self.sub = ctk.CTkLabel(self, text="", font=font(12), text_color=MUTED, anchor="w", justify="left", wraplength=140)
         self.sub.pack(fill="x", padx=16, pady=(0, 14))
 
     def set(self, value, sub=""):
-        self.value.configure(text=value)
-        self.sub.configure(text=sub)
+        update(self.value, text=value)
+        update(self.sub, text=sub)
 
 def ghost_button(master, text, icon_name=None, command=None, **kw):
     """Secondary button: dark fill, subtle border."""

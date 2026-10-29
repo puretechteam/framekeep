@@ -1,8 +1,8 @@
 # FrameKeep - (C) 2025 Tanner Lucier
 # Licensed under the MIT License
 
-import ctypes, os, queue, subprocess, threading
-from . import APP_NAME, autostart
+import ctypes, gc, os, queue, subprocess, threading
+from . import APP_NAME, autostart, stats, winproc
 from .config import DEFAULT_CONFIG, load_config, save_config, validate
 from .hotkeys import Hotkeys
 from .log import log
@@ -26,7 +26,10 @@ def claim_single_instance():
     return True
 
 class App:
-    """Wires the recorder, watchers, hotkeys, tray and window together."""
+    """Wires the recorder, watchers, hotkeys, tray and window together.
+
+    The window only exists while it's open. Closing it to the tray destroys it and releases its memory, and
+    starting minimized never loads the interface at all; the main thread then just waits for work."""
 
     def __init__(self, gui=True, minimized=False):
         loaded = load_config()
@@ -40,6 +43,7 @@ class App:
         self.ui_queue = queue.Queue()   # work the Tk thread must do (the tray and hotkeys run on other threads)
         self.window = None
         self._closing = False
+        self._told_about_tray = False
         self.recorder.subscribe(self._on_status)
 
     # ---- lifecycle ---------------------------------------------------------
@@ -49,16 +53,61 @@ class App:
         self._bind_hotkeys()
         self.tray.start()
         threading.Thread(target=self._wait_for_show_requests, daemon=True).start()
+        threading.Thread(target=stats.prune_thumbs, daemon=True).start()
         if self.cfg["record_on_launch"] and self.cfg["onboarded"] and self.cfg["log_root"]:
             self.recorder.start()
         if self.gui:
-            from .gui.app import MainWindow
-            self.window = MainWindow(self)
-            if self.minimized and not self.first_run:
-                self.window.withdraw()
-            self.window.mainloop()
+            if self.first_run or not self.minimized:
+                self.ui_queue.put(self._open_window)
+            self._run_gui()
         else:
             self._run_headless()
+
+    def _run_gui(self):
+        """Main thread: Tk's event loop while the window is open, otherwise a blocking wait for work."""
+        while not self._closing:
+            if self.window is None:
+                try:
+                    fn = self.ui_queue.get(timeout=5)
+                except queue.Empty:
+                    continue
+                self._call(fn)
+            else:
+                self.window.mainloop()  # returns once the window is destroyed
+                self.window = None
+                self._release_ui()
+
+    def _open_window(self):
+        if self._closing:
+            return
+        if self.window is not None:
+            self.window.show()
+            return
+        from .gui.app import MainWindow
+        self.window = MainWindow(self)
+
+    def close_window(self):
+        """Close to the tray: destroy the window (Tk thread only). FrameKeep keeps running."""
+        if self.window is not None:
+            self.window.destroy()
+        if not self._told_about_tray:
+            self._told_about_tray = True
+            self.tray.notify("FrameKeep is still running in the tray. Right-click the icon to quit.")
+
+    def _release_ui(self):
+        from .gui import theme
+        theme.icon.cache_clear()   # its images belong to the destroyed window
+        theme.release_trackers()
+        gc.collect()
+        winproc.trim_working_set()
+
+    @staticmethod
+    def _call(fn):
+        try:
+            fn()
+        except Exception as e:
+            if type(e).__name__ != "TclError":  # TclError: work queued for a window that has since closed
+                log("ERROR", f"Interface error: {e!r}", "RED")
 
     def _run_headless(self):
         """v2-style: tray only, console logs. Picks a folder with a dialog on first run."""
@@ -71,10 +120,11 @@ class App:
             root.destroy()
             if folder:
                 self.save_settings(self.cfg | {"log_root": folder, "onboarded": True})
-        stop = threading.Event()
-        self._headless_stop = stop
-        while not stop.wait(0.2):
-            self._drain_ui_queue()
+        while not self._closing:
+            try:
+                self._call(self.ui_queue.get(timeout=5))
+            except queue.Empty:
+                pass
 
     def quit(self):
         if self._closing:
@@ -82,13 +132,11 @@ class App:
         self._closing = True
         log("STOPPED", "FrameKeepOS shutting down", "YELLOW")
         self.hotkeys.stop()
-        self.watcher.running = False
+        self.watcher.stop()
         self.recorder.shutdown()
         self.tray.stop()
-        if self.window:
-            self.ui_queue.put(self.window.destroy)
-        elif getattr(self, "_headless_stop", None):
-            self._headless_stop.set()
+        window = self.window
+        self.ui_queue.put(window.destroy if window else (lambda: None))  # wakes the main thread so it can exit
 
     # ---- settings ----------------------------------------------------------
     def save_settings(self, new_cfg):
@@ -112,10 +160,11 @@ class App:
     # ---- cross-thread plumbing ---------------------------------------------
     def _on_status(self, status):
         self.tray.update(status)
+        self.watcher.wake()   # recording started/stopped or settings changed
 
     def show_window(self):
-        if self.window:
-            self.ui_queue.put(self.window.show)
+        if self.gui:
+            self.ui_queue.put(self._open_window)
 
     def _wait_for_show_requests(self):
         event = kernel32.CreateEventW(None, False, False, SHOW_EVENT)
@@ -124,12 +173,15 @@ class App:
                 self.show_window()
 
     def _drain_ui_queue(self):
+        """Run queued work on the Tk thread. True if there was any."""
+        ran = False
         while True:
             try:
                 fn = self.ui_queue.get_nowait()
             except queue.Empty:
-                return
-            fn()
+                return ran
+            ran = True
+            self._call(fn)
 
     # ---- recordings --------------------------------------------------------
     def open_recording(self, path, codec=None):

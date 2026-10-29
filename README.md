@@ -1,4 +1,4 @@
-# FrameKeep 3.0
+# FrameKeep 3.1
 
 ###### (C) 2025 Tanner Lucier. Licensed under the MIT License, see [LICENSE](LICENSE)
 
@@ -20,6 +20,21 @@
 > Put it wherever you like and double-click it.
 
 ---
+
+## What's new in 3.1
+
+A lighter FrameKeep. Every number below is measured against 3.0 on the same PC, FFmpeg and test recording, and
+the full tables (and how to reproduce them) are in [docs/perf](docs/perf/README.md).
+
+- **The app itself is far lighter.** In the tray it now holds 37 MB in RAM instead of 68 MB and commits 21 MB
+  instead of 521 MB, and it wakes up 5 times a second instead of 100. The window is only built while it's open:
+  closing it to the tray frees it, and starting with Windows never loads it at all.
+- **Less memory while recording:** the encoder uses 25% less for H.264, 22% less for AV1 and 11% less for H.266,
+  and H.264/AV1 files came out 2-3% smaller at the same quality.
+- **Instant auto-pause.** Locking the PC or bringing a private app to the front is reported by Windows the moment
+  it happens, with no polling.
+- **"Using now" on the dashboard** shows FrameKeep's and FFmpeg's memory and CPU live, and the Benchmark now
+  measures each format's memory too.
 
 ## What's new in 3.0
 
@@ -89,8 +104,9 @@ If you need files that open everywhere with no fuss, pick **Compatible** (H.264)
 
 - Windows 10 or 11 (64-bit)
 - Any quad-core CPU from roughly the last 10 years. Dual-cores over 2 GHz work with the lighter formats.
-- 4 GB RAM (8 GB recommended for Ultra). While recording, FrameKeep itself uses about 80 MB and the FFmpeg encoder
-  roughly 260 MB (H.264), 470 MB (AV1) or 570 MB (H.266), measured as private memory on a 1080p display.
+- 4 GB RAM (8 GB recommended for Ultra). While recording, FrameKeep itself uses about 40 MB and the FFmpeg encoder
+  roughly 250 MB (H.264), 430 MB (AV1) or 560 MB (H.266), measured as private memory on a 1080p display
+  ([details](docs/perf/README.md)). The dashboard's **Using now** tile shows your own numbers.
 - Any HDD or SSD
 - A GPU isn't required. If you have one, FrameKeep uses it to capture the screen (Desktop Duplication) and offers
   its hardware encoder as the **Low CPU** format.
@@ -158,7 +174,7 @@ the file size noticeably; the codec does that.
 | No keyboard/mouse input | 5 minutes | Pause when you're away (0 = never) |
 | A private app is the active window | KeePass, KeePassXC, 1Password, Bitwarden | Private apps, one program name per line |
 
-Auto-pause works within about a quarter of a second, and recording resumes automatically when the reason goes away.
+Lock and private-app pauses happen the moment Windows reports the change, and recording resumes automatically when the reason goes away (within about half a second for idle pauses).
 
 ---
 
@@ -227,6 +243,9 @@ Install a zip you built yourself with `python tools/fetch_ffmpeg.py --zip <path>
 
 Run the tests with `python -m pytest`.
 
+To measure a change, `tools/measure.py` compares two versions on the same synthetic desktop recording (file size,
+VMAF, CPU, memory, timing) and `tools/measure_ab.py` alternates them for live CPU. See [docs/perf](docs/perf/README.md).
+
 ---
 
 ## How it works
@@ -272,8 +291,8 @@ None of it is stored next to your recordings.
 ## Dependencies explained
 
 - **Python** (source version only) is the language FrameKeep is written in. The `.exe` has Python built in.
-- **CustomTkinter** draws the modern dark interface on top of Python's built-in tkinter. It's light: the app itself
-  uses about 80 MB of RAM.
+- **CustomTkinter** draws the modern dark interface on top of Python's built-in tkinter. It's only loaded while the
+  window is open; in the tray the app itself uses under 40 MB of RAM.
 - **pystray** puts the icon in the system tray.
 - **Pillow** draws the tray icon, the interface icons and the thumbnails.
 - **FFmpeg** does the capturing and encoding: GPU/GDI screen capture, H.266 (VVenC), AV1 (SVT-AV1, libaom),

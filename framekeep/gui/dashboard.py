@@ -3,10 +3,10 @@
 
 import datetime, os, threading, time
 import customtkinter as ctk
-from .. import benchmark, stats
+from .. import benchmark, stats, winproc
 from ..engine import PRESET_INFO
 from .theme import (ACCENT, ACCENT_HOVER, BLUE, BORDER, CARD_HI, GREEN, MUTED, PURPLE, REASON_TEXT, STATE_STYLE, SUBTLE,
-                    TEXT, YELLOW, Badge, Card, Pill, StatTile, font, ghost_button, icon, set_progress, shorten)
+                    TEXT, YELLOW, Badge, Card, Pill, StatTile, font, ghost_button, icon, set_progress, shorten, update)
 
 class DashboardPage(ctk.CTkScrollableFrame):
     def __init__(self, master, win):
@@ -38,14 +38,20 @@ class DashboardPage(ctk.CTkScrollableFrame):
         self.banner_button.pack(side="right", padx=14)
 
         self._build_hero()
+        row = ctk.CTkFrame(self, fg_color="transparent")
+        row.grid(row=3, column=0, columnspan=4, sticky="ew", padx=21)
         self.tiles = {
-            "chunk": StatTile(self, "This chunk", "video", ACCENT),
-            "today": StatTile(self, "Today", "calendar", BLUE),
-            "library": StatTile(self, "Library", "drive", GREEN),
-            "rate": StatTile(self, "Per active hour", "leaf", PURPLE),
+            "chunk": StatTile(row, "This chunk", "video", ACCENT),
+            "today": StatTile(row, "Today", "calendar", BLUE),
+            "library": StatTile(row, "Library", "drive", GREEN),
+            "rate": StatTile(row, "Per active hour", "leaf", PURPLE),
+            "usage": StatTile(row, "Using now", "bolt", YELLOW),
         }
+        row.grid_columnconfigure(tuple(range(len(self.tiles))), weight=1, uniform="tile")
         for i, tile in enumerate(self.tiles.values()):
-            tile.grid(row=3, column=i, sticky="nsew", padx=(28 if i == 0 else 7, 28 if i == 3 else 7), pady=7)
+            tile.grid(row=0, column=i, sticky="nsew", padx=7, pady=7)
+        self.meter = winproc.UsageMeter()
+        self._meter_at = 0
         self._build_info_cards()
 
     # ---- construction ------------------------------------------------------
@@ -132,7 +138,7 @@ class DashboardPage(ctk.CTkScrollableFrame):
 
     def on_status(self, s):
         cfg = self.app.cfg
-        self.date_label.configure(text=datetime.datetime.now().strftime("%A, %B %d").replace(" 0", " "))
+        update(self.date_label, text=datetime.datetime.now().strftime("%A, %B %d").replace(" 0", " "))
         label, color = STATE_STYLE[s["state"]]
         reason = REASON_TEXT.get(s["reason"]) if s["state"] == "auto_paused" else None
         self.pill.set(f"{label}: {reason}" if reason else label, color)
@@ -141,24 +147,24 @@ class DashboardPage(ctk.CTkScrollableFrame):
         active = s["state"] != "idle"
         if s["state"] == "recording" and s["chunk_start"]:
             elapsed = time.time() - s["chunk_start"]
-            self.hero_timer.configure(text=time.strftime("%H:%M:%S", time.gmtime(elapsed)), text_color=TEXT)
+            update(self.hero_timer, text=time.strftime("%H:%M:%S", time.gmtime(elapsed)), text_color=TEXT)
             set_progress(self.hero_progress, min(1, elapsed / s["chunk_seconds"]))
-            self.hero_state.configure(text=f"Recording  ·  new file every {cfg['chunk_minutes']} min", text_color=ACCENT)
-            self.hero_file.configure(text=" · ".join(os.path.basename(f) for f in s["files"]) + f"   in   {shorten(os.path.dirname(s['files'][0]), 60)}" if s["files"] else "")
+            update(self.hero_state, text=f"Recording  ·  new file every {cfg['chunk_minutes']} min", text_color=ACCENT)
+            update(self.hero_file, text=" · ".join(os.path.basename(f) for f in s["files"]) + f"   in   {shorten(os.path.dirname(s['files'][0]), 60)}" if s["files"] else "")
         else:
             set_progress(self.hero_progress, 0)
-            self.hero_timer.configure(text="00:00:00", text_color=SUBTLE)
+            update(self.hero_timer, text="00:00:00", text_color=SUBTLE)
             text = {"paused": "Paused. Resuming starts a new file.", "starting": "Starting…",
                     "auto_paused": f"Auto-paused because {reason}. Resumes automatically.",
                     "idle": "Ready to record"}[s["state"]]
-            self.hero_state.configure(text=text, text_color=color if active else MUTED)
-            self.hero_file.configure(text=f"Saving to {shorten(cfg['log_root'])}" if cfg["log_root"] else "No recordings folder chosen yet")
-        self.toggle_btn.configure(text="Stop recording" if active else "Start recording",
+            update(self.hero_state, text=text, text_color=color if active else MUTED)
+            update(self.hero_file, text=f"Saving to {shorten(cfg['log_root'])}" if cfg["log_root"] else "No recordings folder chosen yet")
+        update(self.toggle_btn, text="Stop recording" if active else "Start recording",
                                   image=icon("stop" if active else "record", 18, "#FFFFFF"),
                                   fg_color=CARD_HI if active else ACCENT, hover_color=BORDER if active else ACCENT_HOVER,
                                   border_width=1 if active else 0, border_color=BORDER)
         paused = s["state"] == "paused"
-        self.pause_btn.configure(text="Resume" if paused else "Pause", image=icon("play" if paused else "pause", 16),
+        update(self.pause_btn, text="Resume" if paused else "Pause", image=icon("play" if paused else "pause", 16),
                                  state="normal" if active else "disabled")
 
         # tiles: finished files come from a background scan (redone when a new file starts), the live file every tick
@@ -180,6 +186,9 @@ class DashboardPage(ctk.CTkScrollableFrame):
             self.tiles["today"].set(stats.human_bytes(sm["today"] + live), f"{stats.plural(sm['today_files'] + n_live, 'recording')} today")
             self.tiles["library"].set(stats.human_bytes(sm["total"] + live),
                                       f"{stats.plural(sm['files'] + n_live, 'recording')} over {stats.plural(sm['days'], 'day')}")
+        if time.time() - self._meter_at >= 2:
+            self._meter_at = time.time()
+            self._update_usage(s)
         rate = (self._report or {}).get("results", {}).get(s["preset"] or cfg["preset"])
         if rate:
             mb = rate["mb_per_hour"]
@@ -190,27 +199,44 @@ class DashboardPage(ctk.CTkScrollableFrame):
         # encoder card
         if s["preset"]:
             name, codec, _ = PRESET_INFO[s["preset"]]
-            self.enc_rows["Format"].configure(text=name)
-            self.enc_rows["Format"].badge.configure(text=codec)
-            self.enc_rows["Encoder"].configure(text=s["encoder"])
+            update(self.enc_rows["Format"], text=name)
+            update(self.enc_rows["Format"].badge, text=codec)
+            update(self.enc_rows["Encoder"], text=s["encoder"])
             backends = sorted(set(s["backends"].values()))
-            self.enc_rows["Capture"].configure(text=", ".join("GPU (Desktop Duplication)" if b == "ddagrab" else "GDI" for b in backends)
+            update(self.enc_rows["Capture"], text=", ".join("GPU (Desktop Duplication)" if b == "ddagrab" else "GDI" for b in backends)
                                                + f" · {len(s['monitors'])} display{'s' if len(s['monitors']) != 1 else ''}")
             if s["resolution"]:
                 w, h = s["resolution"]
                 fps = f"up to {s['fps']} FPS, unchanged frames skipped" if cfg["drop_duplicates"] else f"{s['fps']} FPS"
-                self.enc_rows["Output"].configure(text=f"{w}×{h} @ {fps} · .{s['container']}")
-            self.enc_rows["Quality"].configure(text=cfg["quality"].replace("_", " ").capitalize() + (" · bitrate cap on" if cfg["bitrate_cap"] else ""))
+                update(self.enc_rows["Output"], text=f"{w}×{h} @ {fps} · .{s['container']}")
+            update(self.enc_rows["Quality"], text=cfg["quality"].replace("_", " ").capitalize() + (" · bitrate cap on" if cfg["bitrate_cap"] else ""))
 
         # auto-pause card
         def flag(key, on, text):
             hit = s["state"] == "auto_paused" and s["reason"] == key
-            self.auto_rows[key].configure(text="Active now" if hit else text, text_color=PURPLE if hit else (TEXT if on else SUBTLE))
+            update(self.auto_rows[key], text="Active now" if hit else text, text_color=PURPLE if hit else (TEXT if on else SUBTLE))
         flag("locked", cfg["pause_on_lock"], "On" if cfg["pause_on_lock"] else "Off")
         flag("idle", cfg["idle_pause_minutes"] > 0, f"After {cfg['idle_pause_minutes']} min" if cfg["idle_pause_minutes"] else "Off")
         flag("private", bool(cfg["private_apps"]), f"{len(cfg['private_apps'])} apps" if cfg["private_apps"] else "None set")
 
         self._update_banner(s)
+
+    def _update_usage(self, s):
+        """FrameKeep's own memory and CPU, plus its FFmpeg encoders while recording (private memory, like Task
+        Manager's "Memory" column)."""
+        me = os.getpid()
+        readings = self.meter.sample([me, *s.get("pids", [])])
+        if me not in readings:
+            return
+        app_cpu, app_mem = readings[me]
+        ff = [v for pid, v in readings.items() if pid != me]
+        ff_mem = sum(m for _, m in ff)
+        cpus = [c for c, _ in readings.values() if c is not None]
+        mb = lambda b: f"{b / 2**20:.0f} MB"
+        sub = f"App {mb(app_mem)}, FFmpeg {mb(ff_mem)}" if ff else "FrameKeep only (not recording)"
+        if app_cpu is not None:
+            sub += f" · {sum(cpus):.1f}% CPU"
+        self.tiles["usage"].set(mb(app_mem + ff_mem), sub)
 
     def _update_banner(self, s):
         msg = action = None
@@ -221,6 +247,9 @@ class DashboardPage(ctk.CTkScrollableFrame):
         elif not self._report:
             msg, action = ("Run the 30-second benchmark to find the smallest format your PC can record live.",
                            ("Run benchmark", lambda: self.win.show_page("benchmark")))
+        if msg == getattr(self, "_banner_msg", None):
+            return
+        self._banner_msg = msg
         if msg:
             self.banner_text.configure(text=msg)
             self.banner_button.configure(text=action[0], command=action[1])

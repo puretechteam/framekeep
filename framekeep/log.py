@@ -51,3 +51,8 @@ def subscribe(fn):
         history = list(_history)
     for line in history:
         fn(*line)
+
+def unsubscribe(fn):
+    with _lock:
+        if fn in _listeners:
+            _listeners.remove(fn)

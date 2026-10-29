@@ -5,6 +5,9 @@ import argparse, ctypes, sys
 from . import APP_NAME, __version__
 
 def main():
+    # Pillow imports NumPy whenever it's installed (only for type hints), and NumPy's math library then commits
+    # ~30 MB per CPU thread up front: about 0.5 GB on a 16-thread PC, for a module FrameKeep never uses.
+    sys.modules.setdefault("numpy", None)
     parser = argparse.ArgumentParser(prog="framekeep", description="Low-power, low-storage screen recorder")
     parser.add_argument("--version", action="version", version=f"FrameKeep {__version__}")
     parser.add_argument("--no-gui", action="store_true", help="tray icon and console only, like v2")
@@ -32,10 +35,10 @@ def main():
         from .engine import PRESET_INFO
         report = benchmark.run(load_config() or validate(dict(DEFAULT_CONFIG)), seconds=args.benchmark,
                                progress=lambda text, frac: print(f"[{frac:4.0%}] {text}"))
-        print(f"\n{'Preset':<12}{'Codec':<22}{'MB/hr':>9}{'CPU %':>8}{'VMAF':>7}{'x realtime':>12}")
+        print(f"\n{'Preset':<12}{'Codec':<22}{'MB/hr':>9}{'CPU %':>8}{'RAM MB':>8}{'VMAF':>7}{'x realtime':>12}")
         for preset, r in report["results"].items():
             name, codec, _ = PRESET_INFO[preset]
-            print(f"{name:<12}{codec:<22}{r['mb_per_hour']:>9}{r['cpu_percent']:>8}{str(r['vmaf']):>7}{r['realtime']:>12}")
+            print(f"{name:<12}{codec:<22}{r['mb_per_hour']:>9}{r['cpu_percent']:>8}{str(r.get('ram_mb')):>8}{str(r['vmaf']):>7}{r['realtime']:>12}")
         print(f"\nRecommended: {PRESET_INFO[report['recommended']][0]}")
         return 0
 

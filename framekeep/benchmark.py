@@ -2,8 +2,10 @@
 # Licensed under the MIT License
 """Measure every preset on the user's own screen. Works only in AppData, never in the recordings folder."""
 
-import datetime, json, os, re, shutil, time
-from .engine import FFmpeg, PRESET_CHAINS, PRESET_INFO, cap_kbps, capture_args, encoder_args, output_pix_fmt, target_size
+import datetime, json, os, re, shutil, subprocess, threading, time
+from . import winproc
+from .engine import (FFmpeg, POPEN_FLAGS, PRESET_CHAINS, PRESET_INFO, cap_kbps, capture_args, encoder_args, output_pix_fmt,
+                     target_size, video_filters)
 from .log import log
 from .monitors import list_monitors, select_monitors
 from .paths import BENCHMARK_DIR, BENCHMARK_FILE
@@ -11,6 +13,8 @@ from .paths import BENCHMARK_DIR, BENCHMARK_FILE
 CPU_TARGET = 15.0       # % of the whole machine a live preset may use
 REALTIME_MARGIN = 2.0   # offline encode must run this many times faster than real time
 QUALITY_FLOOR = 93.0    # VMAF a recommendation must reach (above ~93 most people can't tell it from the source)
+RAM_SHARE = 0.25        # an encoder may use at most this share of the PC's memory
+_running = threading.Lock()  # the window can close (and reopen) while a benchmark keeps running
 
 def capture_sample(ff, cfg, seconds, monitor):
     os.makedirs(BENCHMARK_DIR, exist_ok=True)
@@ -18,11 +22,9 @@ def capture_sample(ff, cfg, seconds, monitor):
     backend = "ddagrab" if monitor.dxgi_output is not None and cfg["capture_backend"] != "gdigrab" else "gdigrab"
     cap_in, (sw, sh) = capture_args(cfg, monitor, backend)
     tw, th = target_size(sw, sh, cfg["downscale_factor"])
-    chain = (["hwdownload", "format=bgra"] if backend == "ddagrab" else [])
-    if cfg["drop_duplicates"]:
-        chain.append(f"mpdecimate=max={max(1, int(cfg['fps'])) * 10}")
-    chain += [f"scale={tw}:{th}:flags=area", "format=bgr0"]
-    p = ff.run(["-y", *cap_in, "-t", str(seconds), "-vf", ",".join(chain), "-fps_mode", "passthrough", "-c:v", "ffv1", src],
+    # the live filter chain, stopping at the 8-bit frames it hands to the encoder (stored losslessly)
+    chain = video_filters(cfg, tw, th, "gray" if cfg["grayscale"] else "yuv420p", hw_frames=backend == "ddagrab")
+    p = ff.run(["-y", *cap_in, "-t", str(seconds), "-vf", chain, "-fps_mode", "passthrough", "-c:v", "ffv1", src],
                timeout=seconds + 60)
     if p.returncode != 0:
         raise RuntimeError(f"Sample capture failed: {p.stderr.strip()[-300:]}")
@@ -33,14 +35,22 @@ def encode_one(ff, cfg, src, encoder, seconds, vmaf, size):
     out = os.path.join(BENCHMARK_DIR, f"{encoder}.mp4")
     cap = cap_kbps(*size, cfg["fps"], encoder) if cfg["bitrate_cap"] else None
     args = encoder_args(encoder, cfg["quality"], cfg["fps"], cap)
-    vf = ("format=gray," if cfg["grayscale"] else "") + f"format={output_pix_fmt(args)}"
+    vf = f"format={output_pix_fmt(args)}"
     t = time.time()
-    p = ff.run(["-y", "-benchmark", "-i", src, "-vf", vf, "-fps_mode", "passthrough", *args, out], timeout=3600)
+    p = subprocess.Popen([ff.ffmpeg, "-hide_banner", "-y", "-benchmark", "-i", src, "-vf", vf, "-fps_mode", "passthrough", *args, out],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace",
+                         creationflags=POPEN_FLAGS)
+    try:
+        _, stderr = p.communicate(timeout=3600)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        return None
     wall = time.time() - t
     if p.returncode != 0:
         return None
-    m = re.search(r"utime=([\d.]+)s\s+stime=([\d.]+)s", p.stderr)
+    m = re.search(r"utime=([\d.]+)s\s+stime=([\d.]+)s", stderr)
     cpu = float(m.group(1)) + float(m.group(2)) if m else wall
+    ram = re.search(r"maxrss=(\d+)KiB", stderr)
     size = os.path.getsize(out)
     score = None
     if vmaf:
@@ -52,11 +62,16 @@ def encode_one(ff, cfg, src, encoder, seconds, vmaf, size):
     kbps = size * 8 / seconds / 1000
     return {"encoder": encoder, "kbps": round(kbps, 1), "mb_per_hour": round(kbps * 3600 / 8 / 1000, 1),
             "cpu_percent": round(cpu / seconds / (os.cpu_count() or 1) * 100, 1), "realtime": round(seconds / max(wall, 0.01), 1),
-            "vmaf": score}
+            "vmaf": score, "ram_mb": round(int(ram.group(1)) / 1024) if ram else None}
 
-def problem(r):
+def ram_limit_mb():
+    return winproc.physical_memory() / 2**20 * RAM_SHARE or float("inf")
+
+def problem(r, ram_limit=None):
     """Why a result can't be recommended: "heavy", "quality", or None if it qualifies."""
     if r["cpu_percent"] > CPU_TARGET or r["realtime"] < REALTIME_MARGIN:
+        return "heavy"
+    if (r.get("ram_mb") or 0) > (ram_limit if ram_limit is not None else ram_limit_mb()):
         return "heavy"
     if r["vmaf"] is not None and r["vmaf"] < QUALITY_FLOOR:
         return "quality"
@@ -75,6 +90,8 @@ def reasons(results, recommended):
         issue = problem(r)
         if p == recommended:
             out[p] = ("Recommended", "Smallest file that runs comfortably and still looks good")
+        elif issue == "heavy" and r["cpu_percent"] <= CPU_TARGET and r["realtime"] >= REALTIME_MARGIN:
+            out[p] = ("Too heavy", f"Needs {r['ram_mb']} MB of memory, more than {RAM_SHARE:.0%} of this PC's RAM")
         elif issue == "heavy":
             out[p] = ("Too heavy", f"Uses {r['cpu_percent']:.1f}% CPU and runs {r['realtime']:.1f}× real time "
                                    f"(needs ≤ {CPU_TARGET:.0f}% and ≥ {REALTIME_MARGIN:.0f}×)")
@@ -99,7 +116,18 @@ def explain(report):
         text += f" {PRESET_INFO[p][0]} is smaller, but {why[p][1][0].lower() + why[p][1][1:]}."
     return text
 
+def is_running():
+    return _running.locked()
+
 def run(cfg, seconds=30, progress=lambda text, frac: None):
+    if not _running.acquire(blocking=False):
+        raise RuntimeError("A benchmark is already running")
+    try:
+        return _run(cfg, seconds, progress)
+    finally:
+        _running.release()
+
+def _run(cfg, seconds, progress):
     ff = FFmpeg(cfg["ffmpeg_path"])
     if not ff.ffmpeg:
         raise RuntimeError("ffmpeg not found")
@@ -116,7 +144,8 @@ def run(cfg, seconds=30, progress=lambda text, frac: None):
         r = encode_one(ff, cfg, src, encoder, seconds, vmaf, size)
         if r:
             results[preset] = r
-            log("BENCH", f"{PRESET_INFO[preset][0]:<10} {r['mb_per_hour']:>7} MB/hr  CPU {r['cpu_percent']}%  VMAF {r['vmaf']}", "MAGENTA")
+            log("BENCH", f"{PRESET_INFO[preset][0]:<10} {r['mb_per_hour']:>7} MB/hr  CPU {r['cpu_percent']}%  "
+                         f"RAM {r['ram_mb']} MB  VMAF {r['vmaf']}", "MAGENTA")
     shutil.rmtree(BENCHMARK_DIR, ignore_errors=True)
     report = {"date": datetime.datetime.now().isoformat(timespec="seconds"), "seconds": seconds, "fps": cfg["fps"],
               "downscale_factor": cfg["downscale_factor"], "quality": cfg["quality"], "results": results,

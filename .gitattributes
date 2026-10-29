@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# FFmpeg patches must keep LF line endings to apply to the upstream source
+*.patch -text

@@ -79,6 +79,7 @@ class Recorder:
                     "paused" if self.wanted and self.user_paused else \
                     "auto_paused" if self.wanted and self.auto_reason else "idle"
             return {"state": state, "reason": self.auto_reason, "files": [e.path for e in self.encoders],
+                    "pids": [e.proc.pid for e in self.encoders if getattr(e, "proc", None)],
                     "chunk_start": self.chunk_start, "chunk_seconds": self.cfg["chunk_minutes"] * 60,
                     "preset": self.preset_used, "encoder": self.encoder, "container": self.container,
                     "backends": dict(self.backends),

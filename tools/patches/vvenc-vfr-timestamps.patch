@@ -1,0 +1,102 @@
+--- a/libavcodec/libvvenc.c
++++ b/libavcodec/libvvenc.c
+@@ -58,6 +58,16 @@
+     int   tier;
+     char *stats;
+     AVDictionary *vvenc_opts;
++    /* VVenC derives decode timestamps assuming one tick per frame, which breaks with variable frame rate input
++     * (it treats every gap as missing frames and returns DTS > PTS). So it is given frame numbers as timestamps,
++     * and the real timestamps are looked up again for each packet. */
++    int64_t *pts_map;       /* real pts of input frames pts_map_base, pts_map_base + 1, ... */
++    int64_t  pts_map_base;
++    int      pts_map_len;
++    int      pts_map_size;
++    int64_t  frames_in;
++    int64_t  first_pts;
++    int64_t  frame_dur;     /* nominal frame duration in time_base units, for decode times before the first frame */
+ } VVenCContext;
+ 
+ static void vvenc_log_callback(void *ctx, int level,
+@@ -349,6 +359,7 @@
+ 
+     if (s->au)
+         vvenc_accessUnit_free(s->au, true);
++    av_freep(&s->pts_map);
+ 
+     if (s->encoder) {
+         vvenc_print_summary(s->encoder);
+@@ -360,6 +371,47 @@
+     return 0;
+ }
+ 
++static int64_t vvenc_real_ts(VVenCContext *s, int64_t n)
++{
++    if (n < s->pts_map_base)
++        return s->first_pts + (n < 0 ? n : 0) * s->frame_dur;
++    if (n - s->pts_map_base < s->pts_map_len)
++        return s->pts_map[n - s->pts_map_base];
++    return s->pts_map_len ? s->pts_map[s->pts_map_len - 1] + (n - s->pts_map_base - s->pts_map_len + 1) * s->frame_dur
++                          : s->first_pts + n * s->frame_dur;
++}
++
++static int vvenc_remember_pts(AVCodecContext *avctx, VVenCContext *s, int64_t pts)
++{
++    if (!s->frames_in) {
++        s->first_pts = pts;
++        s->frame_dur = 1;
++        if (avctx->framerate.num > 0 && avctx->framerate.den > 0)
++            s->frame_dur = FFMAX(1, av_rescale_q(1, av_inv_q(avctx->framerate), avctx->time_base));
++    }
++    if (s->pts_map_len == s->pts_map_size) {
++        int size = FFMAX(64, s->pts_map_size * 2);
++        int64_t *map = av_realloc_array(s->pts_map, size, sizeof(*map));
++        if (!map)
++            return AVERROR(ENOMEM);
++        s->pts_map = map;
++        s->pts_map_size = size;
++    }
++    s->pts_map[s->pts_map_len++] = pts;
++    return 0;
++}
++
++static void vvenc_forget_pts(VVenCContext *s, int64_t before)
++{
++    /* decode order: later packets never show or decode before this packet's decode time */
++    int drop = FFMIN(s->pts_map_len, (int)FFMAX(0, before - s->pts_map_base));
++    if (drop > 0) {
++        memmove(s->pts_map, s->pts_map + drop, (s->pts_map_len - drop) * sizeof(*s->pts_map));
++        s->pts_map_len  -= drop;
++        s->pts_map_base += drop;
++    }
++}
++
+ static av_cold int vvenc_frame(AVCodecContext *avctx, AVPacket *pkt, const AVFrame *frame,
+                                int *got_packet)
+ {
+@@ -387,7 +439,10 @@
+         yuvbuf.planes[2].height = frame->height >> 1;
+         yuvbuf.planes[2].stride = frame->linesize[2] >> 1;
+ 
+-        yuvbuf.cts = frame->pts;
++        ret = vvenc_remember_pts(avctx, s, frame->pts);
++        if (ret < 0)
++            return ret;
++        yuvbuf.cts = s->frames_in++;
+         yuvbuf.ctsValid = true;
+         pyuvbuf = &yuvbuf;
+     }
+@@ -406,9 +461,11 @@
+         memcpy(pkt->data, s->au->payload, s->au->payloadUsedSize);
+ 
+         if (s->au->ctsValid)
+-            pkt->pts = s->au->cts;
+-        if (s->au->dtsValid)
+-            pkt->dts = s->au->dts;
++            pkt->pts = vvenc_real_ts(s, s->au->cts);
++        if (s->au->dtsValid) {
++            pkt->dts = vvenc_real_ts(s, s->au->dts);
++            vvenc_forget_pts(s, s->au->dts);
++        }
+         pkt->flags |= AV_PKT_FLAG_KEY * s->au->rap;
+ 
+         *got_packet = 1;

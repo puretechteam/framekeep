@@ -2,6 +2,34 @@ FrameKeep - (C) 2025 Tanner Lucier
 
 Licensed under the MIT License - see LICENSE file for details (v2.1.0 and earlier were released under GPLv3)
 
+v3.1.0 Changelog
+#
+Efficiency (every number measured against 3.0.0 on the same PC, FFmpeg and sample; tables, raw data and the commands to reproduce them are in docs/perf)
+- FrameKeep itself commits 96% less memory (521 MB to 21 MB in the tray) and holds 45% less in RAM (68 MB to 37 MB). Pillow imported NumPy whenever it was installed, which reserved about 0.5 GB for nothing. The .exe never bundled NumPy, but the other savings below apply to it too.
+- The window only exists while it's open. Starting minimized (Start with Windows) never loads the interface at all, and closing the window to the tray releases its memory. Reopening takes about a second.
+- 95% fewer wake-ups in the tray (100 to 5 per second). Auto-pause now listens for Windows' lock/unlock and foreground-window events instead of checking 4 times a second, so a private app is caught the moment it comes to the front.
+- 88% fewer wake-ups and 98% less CPU with the window open. Widgets only redraw when something changed, and CustomTkinter's 30 ms light/dark-theme check is off (FrameKeep is always dark).
+- Less encoder memory while recording: H.264 -25% (330 to 249 MB), AV1 -22% (550 to 426 MB), H.266 -11% (628 to 559 MB). Shorter look-ahead for x264 and SVT-AV1 and 3 VVenC threads instead of 4.
+- Slightly smaller files at the same quality: H.264 -3%, AV1 -2%.
+- H.266 takes 25% less CPU time to encode.
+- Unchanged frames are detected after downscaling instead of at full resolution, which removes a full-size color conversion of every captured frame.
+- The dashboard's library totals no longer rescan every day folder every 30 seconds. Finished days are cached until their folder changes.
+- The Recordings page frees its thumbnails when you leave it and decodes them at the size they're shown.
+- FrameKeep's thumbnail cache in AppData is capped at 50 MB (least recently viewed removed first), and the probe cache is written once per batch instead of once per recording.
+
+New
+- "Using now" tile on the dashboard: FrameKeep's and FFmpeg's memory and CPU, live.
+- The Benchmark measures each format's peak memory (new RAM column) and won't recommend one that needs more than a quarter of your RAM.
+- tools/measure.py and tools/measure_ab.py: reproducible before/after measurements on a synthetic desktop sample.
+
+Fixes
+- H.266 (Ultra) recordings could have broken timestamps after a still stretch (in MP4, 332 of 398 frames shown at the wrong time on the test sample). It's a bug in FFmpeg's VVenC wrapper with variable frame rate. tools/patches/vvenc-vfr-timestamps.patch fixes it, and tools/build_ffmpeg.sh applies it; it takes effect with the next bundled FFmpeg build (fk3).
+- A benchmark started before closing the window can't be started a second time after reopening it.
+
+Tried and dropped
+- Windows efficiency mode (EcoQoS) for FFmpeg raised its CPU time 35-70% in testing, so it isn't used.
+#
+
 v3.0.0 Changelog
 #
 Storage

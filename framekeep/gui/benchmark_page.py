@@ -10,7 +10,7 @@ from .widgets import PRESET_ORDER
 
 class ResultsTable(ctk.CTkFrame):
     """Preset rows with a size bar, CPU, quality and speed. Reused by the wizard."""
-    COLS = ("Format", "Size per active hour", "CPU", "Quality", "Speed", "")
+    COLS = ("Format", "Size per active hour", "CPU", "RAM", "Quality", "Speed", "")
 
     def __init__(self, master, compact=False):
         super().__init__(master, fg_color="transparent")
@@ -24,7 +24,7 @@ class ResultsTable(ctk.CTkFrame):
         results, rec = report["results"], report["recommended"]
         why = benchmark.reasons(results, rec)
         self.grid_columnconfigure(1, weight=1)
-        cols = self.COLS if not self.compact else ("Format", "Size per active hour", "CPU", "Quality", "")
+        cols = self.COLS if not self.compact else ("Format", "Size per active hour", "CPU", "RAM", "Quality", "")
         for c, title in enumerate(cols):
             ctk.CTkLabel(self, text=title.upper(), font=font(11, "bold"), text_color=SUBTLE, anchor="w").grid(
                 row=0, column=c, sticky="w", padx=10, pady=(0, 6))
@@ -46,13 +46,16 @@ class ResultsTable(ctk.CTkFrame):
             issue = benchmark.problem(r)
             ctk.CTkLabel(self, text=f"{r['cpu_percent']:.1f}%", font=font(13),
                          text_color=YELLOW if issue == "heavy" else TEXT).grid(row=row, column=2, padx=10)
+            ram = r.get("ram_mb")   # reports from before 3.1 don't have it
+            ctk.CTkLabel(self, text=f"{ram} MB" if ram else "-", font=font(13),
+                         text_color=YELLOW if issue == "heavy" and ram and ram > benchmark.ram_limit_mb() else TEXT).grid(row=row, column=3, padx=10)
             ctk.CTkLabel(self, text=f"{r['vmaf']:.1f}" if r["vmaf"] is not None else "-", font=font(13),
-                         text_color=YELLOW if issue == "quality" else TEXT).grid(row=row, column=3, padx=10)
-            col = 4
+                         text_color=YELLOW if issue == "quality" else TEXT).grid(row=row, column=4, padx=10)
+            col = 5
             if not self.compact:
                 ctk.CTkLabel(self, text=f"{r['realtime']:.1f}×", font=font(13),
-                             text_color=YELLOW if issue == "heavy" else TEXT).grid(row=row, column=4, padx=10)
-                col = 5
+                             text_color=YELLOW if issue == "heavy" else TEXT).grid(row=row, column=5, padx=10)
+                col = 6
             badge, _ = why[key]
             color = GREEN if key == rec else YELLOW if issue else MUTED
             Badge(self, badge, color).grid(row=row, column=col, padx=10, sticky="w")
@@ -114,7 +117,11 @@ class BenchmarkPage(ctk.CTkScrollableFrame):
         self.show(benchmark.load_report())
 
     def on_show(self):
-        if not self.running:
+        if benchmark.is_running() and not self.running:   # started before the window was last closed
+            self.run_btn.configure(state="disabled", text="Running…")
+            self.progress_label.configure(text="A benchmark started earlier is still running. Results appear here when it's done.")
+        elif not self.running:
+            self.run_btn.configure(state="normal")
             self.show(benchmark.load_report())
 
     def show(self, report):
@@ -133,13 +140,14 @@ class BenchmarkPage(ctk.CTkScrollableFrame):
                                text="In use" if current else f"Use {PRESET_INFO[rec][0]}")
         self.note.configure(text="How it's picked: the smallest file that runs comfortably and still looks good. "
                                  f"\"Too heavy\" means over {benchmark.CPU_TARGET:.0f}% CPU or under "
-                                 f"{benchmark.REALTIME_MARGIN:.0f}× real time. \"Lower quality\" means a VMAF score under "
+                                 f"{benchmark.REALTIME_MARGIN:.0f}× real time, or needing more than {benchmark.RAM_SHARE:.0%} of "
+                                 f"this PC's memory. \"Lower quality\" means a VMAF score under "
                                  f"{benchmark.QUALITY_FLOOR:.0f} (0 to 100; above about 93, most people can't tell it from the "
                                  "original). Size is per hour of screen activity, so a still or locked screen records almost nothing. "
                                  "Fast-moving content like games needs more data and scores lower, so run it while doing what you usually do.")
 
     def start(self):
-        if self.running:
+        if self.running or benchmark.is_running():
             return
         self.running = True
         self.run_btn.configure(state="disabled", text="Running…")

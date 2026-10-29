@@ -42,9 +42,15 @@ EFFICIENCY = {"h264": 1.0, "hevc": 0.7, "av1": 0.5, "vvc": 0.4}
 CAP_BITS_PER_PIXEL = 0.2
 
 # Encoder thread caps. Each thread carries its own frame buffers, so default thread pools sized to the
-# CPU (16+ threads) cost hundreds of MB of RAM for no benefit at 5 FPS. VVenC gets more for real-time headroom.
+# CPU (16+ threads) cost hundreds of MB of RAM for no benefit at 5 FPS. VVenC gets more for real-time headroom
+# (3 threads instead of 3.0's 4: 9% less memory, same files, still several times faster than real time).
 THREADS = 2
-VVENC_THREADS = 4 if (os.cpu_count() or 1) >= 8 else 2
+VVENC_THREADS = 3 if (os.cpu_count() or 1) >= 8 else 2
+# Look-ahead depth, measured on a desktop sample (docs/perf): x264 rc-lookahead=10 (preset slow uses 50) and
+# SVT-AV1 hierarchical-levels=4 (default 5, a 32-frame mini-GOP) each cut encoder memory by about a fifth and
+# came out ~2-3% smaller at the same quality. x265's look-ahead stays: shortening it cost quality.
+X264_LOOKAHEAD = 10
+SVTAV1_LEVELS = 4
 
 def codec_family(encoder):
     if "vvenc" in encoder: return "vvc"
@@ -70,12 +76,12 @@ def encoder_args(encoder, quality, fps, cap=None):
     t = str(THREADS)
     if encoder == "libx264":
         return ["-c:v", "libx264", "-preset", "slow", "-crf", q, "-g", gop, "-pix_fmt", "yuv420p", "-threads", t,
-                "-x264-params", "psy-rd=0:aq-mode=3:ref=5:subme=9:trellis=2:bframes=3", *rate_cap]
+                "-x264-params", f"psy-rd=0:aq-mode=3:ref=5:subme=9:trellis=2:bframes=3:rc-lookahead={X264_LOOKAHEAD}", *rate_cap]
     if encoder == "libx265":
         return ["-c:v", "libx265", "-preset", "medium", "-crf", q, "-g", gop, "-pix_fmt", "yuv420p10le",
                 "-x265-params", f"log-level=error:psy-rd=0:psy-rdoq=0:aq-mode=3:pools={t}:frame-threads=1", *rate_cap]
     if encoder == "libsvtav1":
-        params = f"scm=1:lp={t}" + (f":mbr={cap}" if cap else "")
+        params = f"scm=1:lp={t}:hierarchical-levels={SVTAV1_LEVELS}" + (f":mbr={cap}" if cap else "")
         return ["-c:v", "libsvtav1", "-preset", "8", "-crf", q, "-g", gop, "-pix_fmt", "yuv420p10le", "-svtav1-params", params]
     if encoder == "libaom-av1":
         return ["-c:v", "libaom-av1", "-usage", "realtime", "-cpu-used", "8", "-row-mt", "1", "-threads", t, "-crf", q,
@@ -127,14 +133,16 @@ def muxer_args(container, encoder):
     return ["-f", "webm" if container == "webm" else "matroska", "-cluster_time_limit", "5000", "-flush_packets", "1"]
 
 def video_filters(cfg, w, h, pix_fmt, hw_frames=False):
-    """Filter chain from captured frames to encoder-ready frames."""
+    """Filter chain from captured frames to encoder-ready frames.
+
+    Downscale first, in one pass straight to 8-bit 4:2:0 (or gray), then compare frames. mpdecimate can't read
+    BGRA, so running it first made FFmpeg convert every full-size frame to 4:4:4 just to compare it: about half the
+    filter CPU and ~30 MB of RAM for nothing."""
     chain = ["hwdownload", "format=bgra"] if hw_frames else []
+    chain += [f"scale={w}:{h}:flags=area", "format=gray" if cfg["grayscale"] else "format=yuv420p"]
     if cfg["drop_duplicates"]:
         # keep at least one frame every 10 s so chunk durations stay accurate on a static screen
         chain.append(f"mpdecimate=max={max(1, int(cfg['fps'])) * 10}")
-    chain.append(f"scale={w}:{h}:flags=area")
-    if cfg["grayscale"]:
-        chain.append("format=gray")
     chain.append(f"format={pix_fmt}")
     return ",".join(chain)
 

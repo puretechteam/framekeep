@@ -5,7 +5,7 @@ import customtkinter as ctk
 from .. import __version__
 from ..paths import ICON_PATH
 from . import theme
-from .theme import ACCENT, BORDER, CARD_HI, MUTED, SIDEBAR, STATE_STYLE, TEXT, font, icon
+from .theme import ACCENT, BORDER, CARD_HI, MUTED, SIDEBAR, STATE_STYLE, TEXT, font, icon, update
 
 theme.apply_theme()
 
@@ -24,7 +24,6 @@ class MainWindow(ctk.CTk):
         except Exception:
             pass
         self.protocol("WM_DELETE_WINDOW", self.hide_to_tray)
-        self._told_about_tray = False
         self.status = app.recorder.status()
 
         self.grid_columnconfigure(1, weight=1)
@@ -89,8 +88,11 @@ class MainWindow(ctk.CTk):
             cls = {"dashboard": pages.DashboardPage, "recordings": pages.RecordingsPage, "settings": pages.SettingsPage,
                    "benchmark": pages.BenchmarkPage, "logs": pages.LogsPage}[key]
             self.pages[key] = cls(self.content, self)
-        if self.current:
-            self.pages[self.current].grid_remove()
+        if self.current and self.current != key:
+            old = self.pages[self.current]
+            old.grid_remove()
+            if hasattr(old, "on_hide"):
+                old.on_hide()
             self.nav_buttons[self.current].configure(fg_color="transparent", text_color=MUTED, image=icon(self.current, 18, MUTED))
         self.current = key
         page = self.pages[key]
@@ -109,12 +111,14 @@ class MainWindow(ctk.CTk):
             page.on_show()  # numbers were frozen while hidden; refresh them immediately
 
     def hide_to_tray(self):
-        self.withdraw()
-        if not self._told_about_tray:
-            self._told_about_tray = True
-            self.app.tray.notify("FrameKeep is still running in the tray. Right-click the icon to quit.")
+        """Closing the window destroys it to free its memory. It's rebuilt the next time it's opened."""
+        for page in self.pages.values():
+            if hasattr(page, "on_hide"):
+                page.on_hide()
+        self.app.close_window()
 
     def _wizard_done(self):
+        self.app.first_run = False
         self.wizard.place_forget()
         self.wizard.destroy()
         self.wizard = None
@@ -125,26 +129,30 @@ class MainWindow(ctk.CTk):
 
     # ---- periodic updates --------------------------------------------------
     def _pump(self):
-        self.app._drain_ui_queue()
+        """Run work other threads queued for the window: quickly while it keeps coming, backing off when quiet."""
+        busy = self.app._drain_ui_queue()
+        self._pump_delay = 30 if busy else min(400, self._pump_delay * 2)
         try:
-            self.after(100, self._pump)
+            self.after(self._pump_delay, self._pump)
         except Exception:
             pass  # window destroyed during quit
+
+    _pump_delay = 100
 
     def _poll(self):
         self.status = self.app.recorder.status()
         if self.state() in ("withdrawn", "iconic"):
-            self.after(500, self._poll)  # hidden in the tray or minimized: keep the status fresh, skip all drawing
+            self.after(2000, self._poll)  # minimized: nothing to draw, refreshed in show() when it's restored
             return
         label, color = STATE_STYLE[self.status["state"]]
-        self.side_dot.configure(image=icon("dot", 14, color))
-        self.side_state.configure(text=label)
+        update(self.side_dot, image=icon("dot", 14, color))
+        update(self.side_state, text=label)
         active = self.status["state"] != "idle"
-        self.side_button.configure(text="Stop recording" if active else "Start recording",
-                                   image=icon("stop" if active else "record", 14, "#FFFFFF"),
-                                   fg_color=CARD_HI if active else ACCENT, hover_color=BORDER if active else theme.ACCENT_HOVER,
-                                   border_width=1 if active else 0)
+        update(self.side_button, text="Stop recording" if active else "Start recording",
+               image=icon("stop" if active else "record", 14, "#FFFFFF"),
+               fg_color=CARD_HI if active else ACCENT, hover_color=BORDER if active else theme.ACCENT_HOVER,
+               border_width=1 if active else 0)
         page = self.pages.get(self.current)
         if page is not None and hasattr(page, "on_status"):
             page.on_status(self.status)
-        self.after(250, self._poll)  # visible: keep the timer and live sizes smooth
+        self.after(500, self._poll)  # visible: twice a second keeps the seconds counter smooth

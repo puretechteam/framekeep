@@ -74,8 +74,16 @@ def test_ddagrab_input_and_filters():
     src = cmd[cmd.index("-i") + 1]
     assert src.startswith("ddagrab=output_idx=0:framerate=7:dup_frames=0")
     vf = cmd[cmd.index("-vf") + 1]
-    assert vf.startswith("hwdownload,format=bgra,mpdecimate")
-    assert "scale=960:540" in vf
+    assert vf == "hwdownload,format=bgra,scale=960:540:flags=area,format=yuv420p,mpdecimate=max=70,format=yuv420p"
+
+def test_frames_are_compared_after_downscaling():
+    """mpdecimate can't read BGRA, so in front of the scaler it makes FFmpeg convert every full-size frame first
+    (3.0 did this: about half the filter CPU). It must come after the downscale to 8-bit 4:2:0 or gray."""
+    for gray in (False, True):
+        chain = engine.video_filters(cfg(grayscale=gray), 960, 540, "yuv420p10le", hw_frames=True).split(",")
+        i = next(i for i, f in enumerate(chain) if f.startswith("mpdecimate"))
+        assert chain[i - 2].startswith("scale=960:540") and chain[i - 1] == ("format=gray" if gray else "format=yuv420p")
+        assert chain[-1] == "format=yuv420p10le"
 
 def test_gdigrab_uses_desktop_offsets():
     cmd = engine.build_record_cmd("ffmpeg", cfg(), SIDE, "libx264", "gdigrab", "o.mp4")
@@ -116,3 +124,10 @@ def test_resolve_falls_back(monkeypatch):
     assert engine.FFmpeg.resolve(ff, "lowcpu") == ("compatible", "libx264")
     works.clear()
     assert engine.FFmpeg.resolve(ff, "ultra") == (None, None)
+
+def test_lookahead_settings_stay_lean():
+    """The look-ahead depths that cut encoder memory ~20% in 3.1 (docs/perf) must not quietly revert."""
+    assert "rc-lookahead=10" in engine.encoder_args("libx264", "balanced", 5)[-1]
+    av1 = engine.encoder_args("libsvtav1", "balanced", 5)
+    assert "hierarchical-levels=4" in av1[av1.index("-svtav1-params") + 1]
+    assert engine.VVENC_THREADS <= 3

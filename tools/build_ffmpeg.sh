@@ -18,7 +18,7 @@ FF_VERSION=9.0.2
 FF_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
 VVENC_TAG=v1.14.0
 VMAF_TAG=v3.2.1
-FK_REV=fk2   # bump when the configure line or a library changes without a new FFmpeg version
+FK_REV=fk3   # bump when the configure line or a library changes without a new FFmpeg version
 
 if [ "${1:-}" = "--deps" ]; then
     shift
@@ -27,6 +27,7 @@ if [ "${1:-}" = "--deps" ]; then
         mingw-w64-ucrt-x86_64-{x264,x265,svt-av1,aom,dav1d,SDL2,libvpl,amf-headers,ffnvcodec-headers}
 fi
 [ "${MSYSTEM:-}" = "UCRT64" ] || { echo "Run this from an MSYS2 UCRT64 shell"; exit 1; }
+PATCHES=$(dirname "$(realpath "$0")")/patches
 
 WORK=$(realpath -m "${1:-build/ffmpeg}")
 PREFIX=$WORK/prefix
@@ -61,6 +62,10 @@ if [ ! -d "$SRC" ]; then
     curl -fsSLo "$SRC.tar.xz" "https://ffmpeg.org/releases/$SRC.tar.xz"
     echo "$FF_SHA256  $SRC.tar.xz" | sha256sum -c -
     tar xf "$SRC.tar.xz"
+    # FrameKeep's fixes on top of FFmpeg (each patch explains itself). Applied once, right after unpacking.
+    for p in "$PATCHES"/*.patch; do
+        patch -d "$SRC" -p1 < "$p"
+    done
 fi
 
 # What FrameKeep uses (framekeep/engine.py, framekeep/benchmark.py, framekeep/app.py):

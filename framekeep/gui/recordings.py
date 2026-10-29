@@ -13,23 +13,21 @@ from .theme import (ACCENT, BORDER, CARD, CARD_HI, INPUT, MUTED, Badge, Card, fo
 THUMB_W, THUMB_H = 240, 135
 CODEC_NAMES = {"h264": "H.264", "hevc": "H.265", "av1": "AV1", "vvc": "H.266", "mjpeg": "MJPG"}
 
-def placeholder():
-    img = Image.new("RGB", (THUMB_W * 2, THUMB_H * 2), INPUT)
-    return img
-
-def fit_thumb(path):
-    img = Image.open(path).convert("RGB")
-    img.thumbnail((THUMB_W * 2, THUMB_H * 2))
-    canvas = Image.new("RGB", (THUMB_W * 2, THUMB_H * 2), INPUT)
-    canvas.paste(img, ((canvas.width - img.width) // 2, (canvas.height - img.height) // 2))
+def fit_thumb(path, scale=1.0):
+    """The cached thumbnail at the size it's drawn at (cached files are 2x, for high-DPI screens)."""
+    w, h = round(THUMB_W * scale), round(THUMB_H * scale)
+    with Image.open(path) as src:
+        img = src.convert("RGB")
+    img.thumbnail((w, h))
+    canvas = Image.new("RGB", (w, h), INPUT)
+    canvas.paste(img, ((w - img.width) // 2, (h - img.height) // 2))
     return canvas
 
 class ChunkCard(Card):
     def __init__(self, master, page, chunk, recording):
         super().__init__(master, corner_radius=12)
         self.page, self.chunk, self.info = page, chunk, None
-        self.thumb = ctk.CTkLabel(self, text="", image=ctk.CTkImage(placeholder(), size=(THUMB_W, THUMB_H)),
-                                  corner_radius=8, fg_color=INPUT)
+        self.thumb = ctk.CTkLabel(self, text="", image=page.placeholder, corner_radius=8, fg_color=INPUT)
         self.thumb.pack(padx=10, pady=(10, 8))
         title_row = ctk.CTkFrame(self, fg_color="transparent")
         title_row.pack(fill="x", padx=14)
@@ -86,6 +84,9 @@ class RecordingsPage(ctk.CTkFrame):
         self.win, self.app = win, win.app
         self.pool = ThreadPoolExecutor(max_workers=2)
         self.cache = stats.ProbeCache()
+        self.scale = ctk.ScalingTracker.get_widget_scaling(self)
+        self.placeholder = ctk.CTkImage(Image.new("RGB", (1, 1), INPUT), size=(THUMB_W, THUMB_H))  # one, shared by every card
+        self._generation = 0    # bumped whenever the cards are replaced, so stale thumbnail work is skipped
         self.selected = None
         self.cards = []
         self.columns = 0
@@ -112,6 +113,17 @@ class RecordingsPage(ctk.CTkFrame):
 
     def on_show(self):
         self.refresh()
+
+    def on_hide(self):
+        """Drop the cards and their thumbnails while the page isn't visible; refresh() rebuilds them."""
+        self._clear_cards()
+        self.cache.flush()
+
+    def _clear_cards(self):
+        self._generation += 1
+        for card in self.cards:
+            card.destroy()
+        self.cards = []
 
     def reload(self):
         self.selected = None
@@ -149,9 +161,7 @@ class RecordingsPage(ctk.CTkFrame):
         self._show_day(self.selected, dict(days)[self.selected])
 
     def _show_day(self, name, path=None):
-        for card in self.cards:
-            card.destroy()
-        self.cards = []
+        self._clear_cards()
         if name is None:
             self.empty.configure(text="No recordings yet. Start recording and they'll show up here.")
             self.empty.grid(row=0, column=0, pady=60)
@@ -169,24 +179,28 @@ class RecordingsPage(ctk.CTkFrame):
             card = ChunkCard(self.grid_area, self, chunk, chunk["path"] in recording)
             self.cards.append(card)
             if chunk["path"] not in recording:
-                self.pool.submit(self._load, card, chunk)
+                self.pool.submit(self._load, card, chunk, self._generation)
         self.columns = 0
         self._layout()
 
-    def _load(self, card, chunk):
+    def _load(self, card, chunk, generation):
         """Background: probe + thumbnail (read-only on the recording, writes only to AppData)."""
+        if generation != self._generation:
+            return      # the page moved on before this card's turn came
         info = self.cache.get(chunk)
         if info is None:
             info = self.app.recorder.ff.probe(chunk["path"])
             if info:
                 self.cache.put(chunk, info)
         tp = stats.thumb_path(chunk)
-        if not os.path.exists(tp) and self.app.recorder.ff.ffmpeg:
+        if os.path.exists(tp):
+            stats.touch(tp)
+        elif self.app.recorder.ff.ffmpeg:
             self.app.recorder.ff.thumbnail(chunk["path"], tp, width=THUMB_W * 2)
         thumb = None
         if os.path.exists(tp):
             try:
-                thumb = fit_thumb(tp)
+                thumb = fit_thumb(tp, self.scale)
             except OSError:
                 pass
         self.app.ui_queue.put(lambda: card.set_info(info, thumb))
