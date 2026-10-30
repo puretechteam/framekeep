@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-29 10:02",
+  "cpu_threads": 16,
+  "audio_ffmpeg": "ffmpeg version 9.0.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+  "results": {
+    "Opus 24k": {
+      "tones_kbps": 50.3,
+      "speechlike_kbps": 19.4,
+      "silence_kbps": 0.72,
+      "file_mb_per_hour": 11.4,
+      "cpu_seconds_per_hour": 16.2,
+      "sdr_tones_db": 21.1
+    },
+    "Opus 32k": {
+      "tones_kbps": 63.0,
+      "speechlike_kbps": 26.2,
+      "silence_kbps": 0.81,
+      "file_mb_per_hour": 14.34,
+      "cpu_seconds_per_hour": 15.6,
+      "sdr_tones_db": 28.3
+    },
+    "Opus 48k": {
+      "tones_kbps": 84.2,
+      "speechlike_kbps": 39.0,
+      "silence_kbps": 0.98,
+      "file_mb_per_hour": 19.48,
+      "cpu_seconds_per_hour": 16.2,
+      "sdr_tones_db": 31.4
+    },
+    "Opus 96k": {
+      "tones_kbps": 146.2,
+      "speechlike_kbps": 66.4,
+      "silence_kbps": 1.36,
+      "file_mb_per_hour": 32.95,
+      "cpu_seconds_per_hour": 20.0,
+      "sdr_tones_db": 35.7
+    },
+    "Opus 48k without DTX": {
+      "tones_kbps": 84.2,
+      "speechlike_kbps": 39.0,
+      "silence_kbps": 2.05,
+      "file_mb_per_hour": 19.44,
+      "cpu_seconds_per_hour": 15.6,
+      "sdr_tones_db": 31.4
+    },
+    "Opus 48k 60 ms frames": {
+      "tones_kbps": 48.0,
+      "speechlike_kbps": 39.1,
+      "silence_kbps": 0.57,
+      "file_mb_per_hour": 13.44,
+      "cpu_seconds_per_hour": 15.6,
+      "sdr_tones_db": 25.8
+    },
+    "Opus 48k complexity 5": {
+      "tones_kbps": 58.9,
+      "speechlike_kbps": 43.3,
+      "silence_kbps": 0.91,
+      "file_mb_per_hour": 16.32,
+      "cpu_seconds_per_hour": 12.5,
+      "sdr_tones_db": 26.2
+    },
+    "AAC 64k": {
+      "tones_kbps": 65.7,
+      "speechlike_kbps": 64.1,
+      "silence_kbps": 2.27,
+      "file_mb_per_hour": 20.61,
+      "cpu_seconds_per_hour": 35.0,
+      "sdr_tones_db": 11.0
+    },
+    "AAC 96k": {
+      "tones_kbps": 98.8,
+      "speechlike_kbps": 96.2,
+      "silence_kbps": 2.27,
+      "file_mb_per_hour": 30.39,
+      "cpu_seconds_per_hour": 30.6,
+      "sdr_tones_db": 20.1
+    },
+    "AAC 128k": {
+      "tones_kbps": 132.7,
+      "speechlike_kbps": 128.2,
+      "silence_kbps": 2.27,
+      "file_mb_per_hour": 40.28,
+      "cpu_seconds_per_hour": 26.2,
+      "sdr_tones_db": 32.6
+    },
+    "AAC 160k": {
+      "tones_kbps": 164.9,
+      "speechlike_kbps": 160.2,
+      "silence_kbps": 2.27,
+      "file_mb_per_hour": 49.9,
+      "cpu_seconds_per_hour": 29.4,
+      "sdr_tones_db": 40.2
+    },
+    "AAC 128k fast coder": {
+      "tones_kbps": 99.8,
+      "speechlike_kbps": 128.2,
+      "silence_kbps": 2.27,
+      "file_mb_per_hour": 35.34,
+      "cpu_seconds_per_hour": 30.6,
+      "sdr_tones_db": 54.0
+    }
+  }
+}

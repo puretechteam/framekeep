@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 """Interleaved A/B of two FrameKeep versions' live recording command (dev tool, needs `pip install psutil`).
 

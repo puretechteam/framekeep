@@ -1,15 +1,15 @@
 {
   "version": "3.1.0",
   "repo": ".",
-  "date": "2026-10-29 05:45",
+  "date": "2026-10-29 08:37",
   "machine": {
     "cpu": "Intel64 Family 6 Model 151 Stepping 2, GenuineIntel",
     "threads": 16,
     "os": "Windows-11-10.0.26200-SP0"
   },
-  "ffmpeg": "ffmpeg version 9.0.2-FrameKeep-fk2 Copyright (c) 2000-2026 the FFmpeg developers",
+  "ffmpeg": "ffmpeg version 9.0.2-FrameKeep-fk3 Copyright (c) 2000-2026 the FFmpeg developers",
   "sample": {
-    "file": "build/perf/sample.mkv",
+    "file": "build\\perf\\sample.mkv",
     "seconds": 120,
     "fps": 5,
     "size": "1920x1080"
@@ -27,21 +27,21 @@
       "encoder": "libx264",
       "mb_per_hour": 44.7,
       "vmaf": 97.81,
-      "cpu_seconds": 14.98,
-      "cpu_percent": 0.78,
-      "ffmpeg_peak_mb": 285.5,
-      "realtime": 43.9,
+      "cpu_seconds": 14.26,
+      "cpu_percent": 0.74,
+      "ffmpeg_peak_mb": 283.9,
+      "realtime": 45.9,
       "frames": 398,
       "timing_errors": 0
     },
     "smaller": {
       "encoder": "libx265",
-      "mb_per_hour": 57.5,
-      "vmaf": 94.89,
-      "cpu_seconds": 24.58,
-      "cpu_percent": 1.28,
-      "ffmpeg_peak_mb": 494.8,
-      "realtime": 12.9,
+      "mb_per_hour": 58.1,
+      "vmaf": 94.87,
+      "cpu_seconds": 17.78,
+      "cpu_percent": 0.93,
+      "ffmpeg_peak_mb": 496.1,
+      "realtime": 23.7,
       "frames": 398,
       "timing_errors": 0
     },
@@ -49,75 +49,75 @@
       "encoder": "libsvtav1",
       "mb_per_hour": 25.5,
       "vmaf": 96.18,
-      "cpu_seconds": 18.56,
-      "cpu_percent": 0.97,
-      "ffmpeg_peak_mb": 489.9,
-      "realtime": 33.1,
+      "cpu_seconds": 16.2,
+      "cpu_percent": 0.84,
+      "ffmpeg_peak_mb": 490.6,
+      "realtime": 41.0,
       "frames": 398,
       "timing_errors": 0
     },
     "ultra": {
       "encoder": "libvvenc",
-      "mb_per_hour": 19.7,
-      "vmaf": 23.82,
-      "cpu_seconds": 41.62,
-      "cpu_percent": 2.17,
-      "ffmpeg_peak_mb": 623.9,
-      "realtime": 11.6,
+      "mb_per_hour": 19.6,
+      "vmaf": 96.39,
+      "cpu_seconds": 37.91,
+      "cpu_percent": 1.97,
+      "ffmpeg_peak_mb": 624.0,
+      "realtime": 12.7,
       "frames": 398,
-      "timing_errors": 332
+      "timing_errors": 0
     },
     "lowcpu": {
       "encoder": "av1_nvenc",
       "mb_per_hour": 39.2,
       "vmaf": 97.92,
-      "cpu_seconds": 11.14,
-      "cpu_percent": 0.58,
-      "ffmpeg_peak_mb": 604.3,
-      "realtime": 62.5,
+      "cpu_seconds": 10.47,
+      "cpu_percent": 0.55,
+      "ffmpeg_peak_mb": 599.7,
+      "realtime": 67.2,
       "frames": 398,
       "timing_errors": 0
     }
   },
   "pipeline": {
     "compatible": {
-      "private_mb_mean": 248.6,
-      "private_mb_peak": 252.9,
-      "working_set_mb_mean": 210.1,
+      "private_mb_mean": 250.3,
+      "private_mb_peak": 252.8,
+      "working_set_mb_mean": 211.3,
       "cpu_percent": 0.92,
-      "ctx_switches_per_s": 61.9,
+      "ctx_switches_per_s": 270.6,
       "mb_per_hour": 44.7
     },
     "smaller": {
-      "private_mb_mean": 445.5,
-      "private_mb_peak": 462.9,
-      "working_set_mb_mean": 398.2,
-      "cpu_percent": 1.14,
-      "ctx_switches_per_s": 195.0,
-      "mb_per_hour": 58.6
+      "private_mb_mean": 446.3,
+      "private_mb_peak": 462.4,
+      "working_set_mb_mean": 398.4,
+      "cpu_percent": 0.94,
+      "ctx_switches_per_s": 297.2,
+      "mb_per_hour": 58.4
     },
     "smallest": {
-      "private_mb_mean": 426.2,
-      "private_mb_peak": 430.2,
-      "working_set_mb_mean": 335.3,
-      "cpu_percent": 1.25,
-      "ctx_switches_per_s": 1227.6,
+      "private_mb_mean": 426.3,
+      "private_mb_peak": 434.6,
+      "working_set_mb_mean": 335.5,
+      "cpu_percent": 1.02,
+      "ctx_switches_per_s": 1257.7,
       "mb_per_hour": 25.5
     },
     "ultra": {
-      "private_mb_mean": 558.6,
-      "private_mb_peak": 595.1,
-      "working_set_mb_mean": 478.2,
-      "cpu_percent": 6.92,
-      "ctx_switches_per_s": 44800.6,
-      "mb_per_hour": 19.7
+      "private_mb_mean": 555.1,
+      "private_mb_peak": 589.4,
+      "working_set_mb_mean": 475.6,
+      "cpu_percent": 6.97,
+      "ctx_switches_per_s": 20560.2,
+      "mb_per_hour": 19.6
     },
     "lowcpu": {
       "private_mb_mean": 570.6,
       "private_mb_peak": 571.4,
-      "working_set_mb_mean": 375.4,
-      "cpu_percent": 0.71,
-      "ctx_switches_per_s": 262.7,
+      "working_set_mb_mean": 375.2,
+      "cpu_percent": 0.77,
+      "ctx_switches_per_s": 271.1,
       "mb_per_hour": 39.2
     }
   },
@@ -125,32 +125,32 @@
     "tray": {
       "app": {
         "private_mb_mean": 21.1,
-        "private_mb_peak": 21.1,
-        "working_set_mb_mean": 37.3,
+        "private_mb_peak": 21.2,
+        "working_set_mb_mean": 37.5,
         "cpu_percent": 0.0,
-        "ctx_switches_per_s": 4.6
+        "ctx_switches_per_s": 3.2
       }
     },
     "window": {
       "app": {
-        "private_mb_mean": 33.3,
-        "private_mb_peak": 33.3,
-        "working_set_mb_mean": 61.0,
+        "private_mb_mean": 32.9,
+        "private_mb_peak": 32.9,
+        "working_set_mb_mean": 60.9,
         "cpu_percent": 0.01,
-        "ctx_switches_per_s": 73.1
+        "ctx_switches_per_s": 35.4
       }
     },
     "recording_in_tray": {
       "app": {
-        "private_mb_mean": 20.7,
-        "private_mb_peak": 20.7,
-        "working_set_mb_mean": 37.2,
+        "private_mb_mean": 21.2,
+        "private_mb_peak": 21.2,
+        "working_set_mb_mean": 37.7,
         "cpu_percent": 0.0,
-        "ctx_switches_per_s": 6.4
+        "ctx_switches_per_s": 9.4
       },
       "ffmpeg": {
-        "private_mb": 340.1,
-        "working_set_mb": 262.4
+        "private_mb": 1.2,
+        "working_set_mb": 7.6
       }
     }
   }

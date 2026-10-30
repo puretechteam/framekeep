@@ -1,17 +1,20 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
-"""Read-only recordings browser. Deleting and moving files stays manual, in Explorer."""
+"""Read-only recordings browser, for desktop recordings and each camera. Deleting and moving files stays manual, in
+Explorer (only the optional camera cleanup in Settings ever deletes, and only old camera footage)."""
 
-import datetime, os
+import datetime, os, tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 import customtkinter as ctk
 from PIL import Image
-from .. import stats
+from .. import motion, stats
+from ..config import camera_root
 from ..log import log
 from .theme import (ACCENT, BORDER, CARD, CARD_HI, INPUT, MUTED, Badge, Card, font, ghost_button, icon)
 
 THUMB_W, THUMB_H = 240, 135
 CODEC_NAMES = {"h264": "H.264", "hevc": "H.265", "av1": "AV1", "vvc": "H.266", "mjpeg": "MJPG"}
+AUDIO_NAMES = {"opus": "Opus", "aac": "AAC"}
 
 def fit_thumb(path, scale=1.0):
     """The cached thumbnail at the size it's drawn at (cached files are 2x, for high-DPI screens)."""
@@ -24,7 +27,7 @@ def fit_thumb(path, scale=1.0):
     return canvas
 
 class ChunkCard(Card):
-    def __init__(self, master, page, chunk, recording):
+    def __init__(self, master, page, chunk, recording, motion_count=0):
         super().__init__(master, corner_radius=12)
         self.page, self.chunk, self.info = page, chunk, None
         self.thumb = ctk.CTkLabel(self, text="", image=page.placeholder, corner_radius=8, fg_color=INPUT)
@@ -36,6 +39,8 @@ class ChunkCard(Card):
         ctk.CTkLabel(title_row, text=stamp.replace("-", ":"), font=font(15, "bold", display=True), anchor="w").pack(side="left")
         if mon:
             Badge(title_row, mon.replace("mon", "Display "), MUTED).pack(side="left", padx=8)
+        if motion_count:
+            Badge(title_row, f"{motion_count} motion", ACCENT).pack(side="left", padx=8)
         self.codec_badge = Badge(title_row, "…", MUTED)
         self.codec_badge.pack(side="right")
         self.meta = ctk.CTkLabel(self, text=stats.human_bytes(chunk["size"]), font=font(12), text_color=MUTED, anchor="w")
@@ -59,7 +64,10 @@ class ChunkCard(Card):
         self.info = info or {}
         codec = self.info.get("codec")
         if codec:
-            self.codec_badge.configure(text=CODEC_NAMES.get(codec, codec.upper()), text_color=ACCENT if codec == "vvc" else MUTED)
+            text = CODEC_NAMES.get(codec, codec.upper())
+            if self.info.get("audio"):     # recorded with desktop audio
+                text += " · " + AUDIO_NAMES.get(self.info["audio"], self.info["audio"].upper())
+            self.codec_badge.configure(text=text, text_color=ACCENT if codec == "vvc" else MUTED)
         dur = self.info.get("duration")
         parts = [stats.human_duration(dur)] if dur else []
         if self.info.get("width"):
@@ -68,7 +76,7 @@ class ChunkCard(Card):
         self.meta.configure(text="  ·  ".join(parts))
         if thumb:
             self.thumb.configure(image=ctk.CTkImage(thumb, size=(THUMB_W, THUMB_H)))
-        if codec == "h264" and hasattr(self, "share_btn"):
+        if codec == "h264" and self.info.get("audio") in (None, "aac") and hasattr(self, "share_btn"):
             self.share_btn.pack_forget()  # already plays everywhere
 
     def play(self):
@@ -98,10 +106,15 @@ class RecordingsPage(ctk.CTkFrame):
         titles = ctk.CTkFrame(head, fg_color="transparent")
         titles.pack(side="left")
         ctk.CTkLabel(titles, text="Recordings", font=font(26, "bold", display=True), anchor="w").pack(anchor="w")
-        ctk.CTkLabel(titles, text="FrameKeep never edits or deletes recordings. Tidy up in Explorer whenever you like.",
-                     font=font(13), text_color=MUTED, anchor="w").pack(anchor="w")
-        ghost_button(head, "Refresh", "refresh", command=self.refresh).pack(side="right")
-        ghost_button(head, "Open folder", "open_folder", command=self._open_root).pack(side="right", padx=8)
+        ctk.CTkLabel(titles, text="FrameKeep never edits or deletes desktop recordings. Old camera footage is only "
+                                  "deleted if you turn that on in Settings.",
+                     font=font(13), text_color=MUTED, anchor="w", justify="left", wraplength=400).pack(anchor="w")
+        ghost_button(head, "Refresh", "refresh", width=110, command=self.refresh).pack(side="right")
+        ghost_button(head, "Open folder", "open_folder", width=130, command=self._open_root).pack(side="right", padx=8)
+        ghost_button(head, "Open player", "play", width=130, command=self._open_player).pack(side="right")
+        self.source_var = tk.StringVar(value="Desktop")
+        self.source_menu = ctk.CTkOptionMenu(head, variable=self.source_var, values=["Desktop"], width=180,
+                                             command=lambda _v: self._source_changed())
 
         self.day_list = ctk.CTkScrollableFrame(self, width=230, fg_color=CARD, border_width=1, border_color=BORDER, corner_radius=12)
         self.day_list.grid(row=1, column=0, sticky="nsw", padx=(28, 8), pady=(0, 28))
@@ -128,16 +141,43 @@ class RecordingsPage(ctk.CTkFrame):
     def reload(self):
         self.selected = None
 
+    def _camera(self):
+        return next((c for c in self.app.cfg["cameras"] if c["name"] == self.source_var.get()), None)
+
+    def _root(self):
+        """The folder whose day folders are listed: the recordings folder, or the chosen camera's folder."""
+        cam, root = self._camera(), camera_root(self.app.cfg)
+        if cam and root:
+            return os.path.join(root, cam["folder"])
+        return self.app.cfg["log_root"]
+
+    def _source_changed(self):
+        self.selected = None
+        self.refresh()
+
+    def _open_player(self):
+        """The player on the day shown here, starting with this source."""
+        cam = self._camera()
+        self.app.open_player([cam["id"] if cam else "desktop"], self.selected)
+
     def _open_root(self):
-        root = self.app.cfg["log_root"]
+        root = self._root()
         if root and os.path.isdir(root):
             os.startfile(root)
 
     def refresh(self):
+        names = [c["name"] for c in self.app.cfg["cameras"]]
+        if names:
+            self.source_menu.configure(values=["Desktop", *names])
+            self.source_menu.pack(side="right", padx=(0, 8))
+        else:
+            self.source_menu.pack_forget()
+        if self.source_var.get() not in ["Desktop", *names]:
+            self.source_var.set("Desktop")
         for w in self.day_list.winfo_children():
             w.destroy()
         self.day_buttons = {}
-        days = stats.list_days(self.app.cfg["log_root"])
+        days = stats.list_days(self._root())
         if not days:
             self._show_day(None)
             return
@@ -170,13 +210,16 @@ class RecordingsPage(ctk.CTkFrame):
         for n, b in self.day_buttons.items():
             b.configure(fg_color=CARD_HI if n == name else "transparent")
         self.selected = name
-        recording = set(self.win.status.get("files", []))
+        recording = set(self.win.status.get("files", [])) | set(self.app.station.active_files())
         chunks = stats.list_chunks(path)
+        events = motion.read_events(path) if self._camera() else []
         if not chunks:
             self.empty.configure(text="This day has no recordings.")
             self.empty.grid(row=0, column=0, pady=60)
         for chunk in chunks:
-            card = ChunkCard(self.grid_area, self, chunk, chunk["path"] in recording)
+            start = motion.chunk_start(chunk["path"]) if events else None
+            moving = sum(1 for e in events if start is not None and start <= e["start"] <= chunk["mtime"])
+            card = ChunkCard(self.grid_area, self, chunk, chunk["path"] in recording, moving)
             self.cards.append(card)
             if chunk["path"] not in recording:
                 self.pool.submit(self._load, card, chunk, self._generation)

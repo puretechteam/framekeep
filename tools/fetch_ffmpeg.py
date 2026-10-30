@@ -1,9 +1,9 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 """Download the pinned FFmpeg build into ./ffmpeg.
 
 It is a minimal FFmpeg made by tools/build_ffmpeg.sh (only what FrameKeep uses: H.266/VVenC, SVT-AV1, x264, x265,
-GPU encoders, screen capture and ffplay), published by .github/workflows/ffmpeg.yml.
+GPU encoders, screen capture, Opus/AAC for desktop audio, cameras and the FrameKeep player), published by .github/workflows/ffmpeg.yml.
 
 Usage: python tools/fetch_ffmpeg.py [--force] [--zip PATH]
   --zip PATH  install a zip you built yourself with tools/build_ffmpeg.sh instead of downloading (no checksum)
@@ -11,9 +11,9 @@ Usage: python tools/fetch_ffmpeg.py [--force] [--zip PATH]
 
 import hashlib, io, os, shutil, sys, urllib.request, zipfile
 
-VERSION = "9.0.2-fk2"
+VERSION = "9.0.2-fk3"
 URL = f"https://github.com/puretechteam/framekeep/releases/download/ffmpeg-{VERSION}/framekeep-ffmpeg-{VERSION}-win64.zip"
-SHA256 = "5acef9360061a6b0f11bc318d85c362617f4cfde39292679aa5f4ee1510f8e53"
+SHA256 = "3126b4762825bbc044f4b320fd171f22054ee8fb83933b563b547419d0bc4412"
 DEST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ffmpeg")
 STAMP = os.path.join(DEST, "VERSION")
 

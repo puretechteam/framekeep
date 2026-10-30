@@ -1,10 +1,10 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 
 import datetime, os, threading, time
 import customtkinter as ctk
 from .. import benchmark, stats, winproc
-from ..engine import PRESET_INFO
+from ..engine import AUDIO_INFO, PRESET_INFO
 from .theme import (ACCENT, ACCENT_HOVER, BLUE, BORDER, CARD_HI, GREEN, MUTED, PURPLE, REASON_TEXT, STATE_STYLE, SUBTLE,
                     TEXT, YELLOW, Badge, Card, Pill, StatTile, font, ghost_button, icon, set_progress, shorten, update)
 
@@ -85,7 +85,7 @@ class DashboardPage(ctk.CTkScrollableFrame):
         enc = Card(self)
         enc.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=(28, 7), pady=(7, 28))
         ctk.CTkLabel(enc, text="Encoder", font=font(15, "bold", display=True), anchor="w").pack(fill="x", padx=20, pady=(16, 8))
-        self.enc_rows = {k: self._kv(enc, k) for k in ("Format", "Encoder", "Capture", "Output", "Quality")}
+        self.enc_rows = {k: self._kv(enc, k) for k in ("Format", "Encoder", "Capture", "Output", "Quality", "Audio")}
 
         auto = Card(self)
         auto.grid(row=4, column=2, columnspan=2, sticky="nsew", padx=(7, 28), pady=(7, 28))
@@ -102,6 +102,16 @@ class DashboardPage(ctk.CTkScrollableFrame):
             self.auto_rows[key] = value
         ctk.CTkFrame(auto, height=10, width=1, fg_color="transparent").pack(pady=(0, 3))
 
+        # cameras: one line each, gridded only when there are cameras
+        self.cams = Card(self)
+        top = ctk.CTkFrame(self.cams, fg_color="transparent")
+        top.pack(fill="x", padx=20, pady=(16, 6))
+        ctk.CTkLabel(top, text="Cameras", font=font(15, "bold", display=True), anchor="w").pack(side="left")
+        ghost_button(top, "Open cameras", "cameras", height=30, command=lambda: self.win.show_page("cameras")).pack(side="right")
+        self.cam_rows_frame = ctk.CTkFrame(self.cams, fg_color="transparent")
+        self.cam_rows_frame.pack(fill="x", padx=20, pady=(0, 14))
+        self.cam_rows, self._cam_layout = {}, None
+
     def _kv(self, parent, key):
         row = ctk.CTkFrame(parent, fg_color="transparent")
         row.pack(fill="x", padx=20, pady=4)
@@ -112,6 +122,11 @@ class DashboardPage(ctk.CTkScrollableFrame):
             badge = Badge(row, "", ACCENT)
             badge.pack(side="right")
             value.badge = badge
+        if key == "Audio":      # live level of what's being recorded
+            level = ctk.CTkProgressBar(row, width=70, height=6)
+            level.pack(side="right")
+            set_progress(level, 0)
+            value.level = level
         return value
 
     # ---- updates -----------------------------------------------------------
@@ -210,6 +225,8 @@ class DashboardPage(ctk.CTkScrollableFrame):
                 fps = f"up to {s['fps']} FPS, unchanged frames skipped" if cfg["drop_duplicates"] else f"{s['fps']} FPS"
                 update(self.enc_rows["Output"], text=f"{w}×{h} @ {fps} · .{s['container']}")
             update(self.enc_rows["Quality"], text=cfg["quality"].replace("_", " ").capitalize() + (" · bitrate cap on" if cfg["bitrate_cap"] else ""))
+        self._update_audio(s, cfg)
+        self._update_cameras()
 
         # auto-pause card
         def flag(key, on, text):
@@ -221,11 +238,54 @@ class DashboardPage(ctk.CTkScrollableFrame):
 
         self._update_banner(s)
 
+    def _update_audio(self, s, cfg):
+        a, row = s.get("audio"), self.enc_rows["Audio"]
+        if not a:
+            text = "Off" if not cfg["audio"] else "Unavailable with this FFmpeg"
+            update(row, text=text, text_color=SUBTLE if not cfg["audio"] else YELLOW)
+            set_progress(row.level, 0)
+            return
+        where = {"device": a["device"], "excluding": a["device"], "muted": "Silenced while a left-out app plays",
+                 "no device": "No sound output found"}.get(a["mode"], "Starts with the next file")
+        update(row, text=f"{AUDIO_INFO[a['codec']][0]} {a['kbps']} kbps · {shorten(where or '', 40)}", text_color=TEXT)
+        set_progress(row.level, min(1.0, a["peak"] ** 0.5), GREEN)   # square root reads closer to loudness
+
+    def _update_cameras(self):
+        from .cameras import STATE
+        station = self.app.station
+        statuses = station.status()
+        layout = tuple(st["id"] for st in statuses)
+        if layout != self._cam_layout:
+            self._cam_layout = layout
+            for w in self.cam_rows_frame.winfo_children():
+                w.destroy()
+            self.cam_rows = {}
+            for st in statuses:
+                row = ctk.CTkFrame(self.cam_rows_frame, fg_color="transparent")
+                row.pack(fill="x", pady=4)
+                dot = ctk.CTkLabel(row, text="", image=icon("dot", 14, SUBTLE), width=14)
+                dot.pack(side="left")
+                ctk.CTkLabel(row, text=st["name"], font=font(13), anchor="w").pack(side="left", padx=10)
+                value = ctk.CTkLabel(row, text="", font=font(13, "bold"), text_color=MUTED)
+                value.pack(side="right")
+                self.cam_rows[st["id"]] = (dot, value)
+            if statuses:
+                self.cams.grid(row=5, column=0, columnspan=4, sticky="ew", padx=28, pady=(0, 28))
+            else:
+                self.cams.grid_remove()
+        for st in statuses:
+            dot, value = self.cam_rows[st["id"]]
+            label, color = STATE.get(st["state"], STATE["off"])
+            events = f"  ·  {stats.plural(st['events_today'], 'motion event')} today" if st["state"] != "off" else ""
+            update(dot, image=icon("dot", 14, color))
+            update(value, text=("Motion now" if st["motion"] else label) + events,
+                   text_color=ACCENT if st["motion"] else (TEXT if st["state"] == "recording" else MUTED))
+
     def _update_usage(self, s):
         """FrameKeep's own memory and CPU, plus its FFmpeg encoders while recording (private memory, like Task
         Manager's "Memory" column)."""
         me = os.getpid()
-        readings = self.meter.sample([me, *s.get("pids", [])])
+        readings = self.meter.sample([me, *s.get("pids", []), *self.app.station.pids()])
         if me not in readings:
             return
         app_cpu, app_mem = readings[me]
@@ -234,6 +294,8 @@ class DashboardPage(ctk.CTkScrollableFrame):
         cpus = [c for c, _ in readings.values() if c is not None]
         mb = lambda b: f"{b / 2**20:.0f} MB"
         sub = f"App {mb(app_mem)}, FFmpeg {mb(ff_mem)}" if ff else "FrameKeep only (not recording)"
+        if ff and self.app.station.pids():
+            sub = f"App {mb(app_mem)}, FFmpeg {mb(ff_mem)} (incl. cameras)"
         if app_cpu is not None:
             sub += f" · {sum(cpus):.1f}% CPU"
         self.tiles["usage"].set(mb(app_mem + ff_mem), sub)
@@ -244,6 +306,11 @@ class DashboardPage(ctk.CTkScrollableFrame):
             msg, action = s["error"], ("View logs", lambda: self.win.show_page("logs"))
         elif not self.app.cfg["log_root"]:
             msg, action = "Choose where recordings are saved to start recording.", ("Open settings", lambda: self.win.show_page("settings"))
+        elif self.app.storage["over"]:
+            msg = (f"Recordings now use {stats.human_bytes(self.app.storage['bytes'])}, past your "
+                   f"{self.app.cfg['storage_warn_gb']} GB warning. Free some space, raise the warning, or turn on "
+                   f"cleanup of old camera footage.")
+            action = ("Disk space settings", lambda: self.win.show_page("settings"))
         elif not self._report:
             msg, action = ("Run the 30-second benchmark to find the smallest format your PC can record live.",
                            ("Run benchmark", lambda: self.win.show_page("benchmark")))

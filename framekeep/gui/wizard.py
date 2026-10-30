@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 
 import os, threading, tkinter as tk
@@ -23,6 +23,7 @@ class Wizard(ctk.CTkFrame):
         self.record_now = tk.BooleanVar(value=True)
         self.record_on_launch = tk.BooleanVar(value=True)
         self.start_with_windows = tk.BooleanVar(value=app.cfg["start_with_windows"])
+        self.audio = tk.BooleanVar(value=app.cfg["audio"])
         self.upgrading = bool(app.cfg["log_root"])
 
         self.panel = Card(self, width=760, corner_radius=18)
@@ -151,9 +152,11 @@ class Wizard(ctk.CTkFrame):
     def _format(self):
         self._heading("Pick a format", "You can change this any time in Settings.")
         PresetPicker(self.body, self.app, self.preset, self.report).pack(fill="x")
-        ctk.CTkLabel(self.body, text="Ultra (H.266) files open in FrameKeep's built-in player. For other apps, use "
+        ctk.CTkLabel(self.body, text="Ultra (H.266) files open in the FrameKeep player. For other apps, use "
                                   "“Share copy” on the Recordings page. It makes a new H.264 file and leaves the original alone.",
                      font=font(12), text_color=MUTED, anchor="w", justify="left", wraplength=600).pack(fill="x", pady=(8, 12))
+        ctk.CTkCheckBox(self.body, text="Also record desktop audio (what your PC plays; silence costs almost nothing)",
+                        variable=self.audio, font=font(13)).pack(anchor="w", pady=(0, 6))
         opts = ctk.CTkFrame(self.body, fg_color="transparent")
         opts.pack(fill="x", pady=(8, 0))
         ctk.CTkCheckBox(opts, text="Start recording now", variable=self.record_now, font=font(13)).pack(side="left", padx=(0, 18))
@@ -163,7 +166,8 @@ class Wizard(ctk.CTkFrame):
     def finish(self):
         self.app.save_settings(self.app.cfg | {"log_root": self.folder.get(), "preset": self.preset.get(), "onboarded": True,
                                                "record_on_launch": self.record_on_launch.get(),
-                                               "start_with_windows": self.start_with_windows.get()})
+                                               "start_with_windows": self.start_with_windows.get(),
+                                               "audio": self.audio.get()})
         self.app.first_run = False
         if self.record_now.get():
             self.app.recorder.start()

@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 # Builds a single portable FrameKeep.exe with FFmpeg inside:  pyinstaller framekeep.spec
 # FFmpeg comes from ./ffmpeg (tools/fetch_ffmpeg.py) unless FRAMEKEEP_FFMPEG_DIR points elsewhere. It is the minimal
@@ -26,7 +26,7 @@ a = Analysis(
     pathex=["."],
     binaries=binaries,
     datas=datas,
-    hiddenimports=["pystray._win32"],
+    hiddenimports=[],
     excludes=["numpy", "cv2", "PySide6", "matplotlib", "pandas", "scipy", "IPython", "pytest"],
 )
 # PyInstaller's dependency scan of ffmpeg.exe also copies the FFmpeg DLLs into the bundle root, a second unused copy

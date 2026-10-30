@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 """Read-only views of the recordings folder. Nothing here writes inside it."""
 
@@ -40,17 +40,6 @@ def list_chunks(day_path):
             st = e.stat()
             out.append({"path": e.path, "name": e.name, "size": st.st_size, "mtime": st.st_mtime})
     return sorted(out, key=lambda c: c["name"], reverse=True)
-
-def folder_bytes(path):
-    total = 0
-    for dirpath, _, files in os.walk(path):
-        for f in files:
-            if f.lower().endswith(VIDEO_EXT):
-                try:
-                    total += os.path.getsize(os.path.join(dirpath, f))
-                except OSError:
-                    pass
-    return total
 
 def plural(n, word):
     return f"{n} {word}{'' if n == 1 else 's'}"

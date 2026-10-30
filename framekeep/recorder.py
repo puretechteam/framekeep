@@ -1,9 +1,9 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 
 import datetime, os, queue, threading, time
-from .engine import (CONTAINER_INFO, FFmpeg, Encoder, PRESET_INFO, build_record_cmd, capture_region, resolve_container,
-                     target_size)
+from .engine import (AUDIO_INFO, AUDIO_KBPS, CONTAINER_INFO, FFmpeg, Encoder, PRESET_INFO, audio_codec, build_audio_cmd,
+                     build_mux_cmd, build_record_cmd, capture_region, resolve_container, target_size)
 from .log import log
 from .monitors import list_monitors, select_monitors
 
@@ -43,6 +43,8 @@ class Recorder:
         self.chunk_start = None
         self.preset_used = self.encoder = None
         self.container = "mp4"
+        self.audio_codec = None         # "opus" | "aac" while desktop audio is on and this FFmpeg can record it
+        self._audio_failed = False      # capture failure already logged
         self.monitors = []
         self.backends = {}              # monitor device -> "ddagrab" | "gdigrab"
         self.failures = 0
@@ -57,8 +59,6 @@ class Recorder:
 
     def start(self):        self._q.put(("start",))
     def stop(self):         self._q.put(("stop",))
-    def pause(self):        self._q.put(("pause",))
-    def resume(self):       self._q.put(("resume",))
     def toggle(self):       self._q.put(("toggle",))
     def toggle_pause(self): self._q.put(("toggle_pause",))
     def set_auto_pause(self, reason): self._q.put(("auto", reason))
@@ -79,10 +79,10 @@ class Recorder:
                     "paused" if self.wanted and self.user_paused else \
                     "auto_paused" if self.wanted and self.auto_reason else "idle"
             return {"state": state, "reason": self.auto_reason, "files": [e.path for e in self.encoders],
-                    "pids": [e.proc.pid for e in self.encoders if getattr(e, "proc", None)],
+                    "pids": [pid for e in self.encoders for pid in (e.pids() if hasattr(e, "pids") else [])],
                     "chunk_start": self.chunk_start, "chunk_seconds": self.cfg["chunk_minutes"] * 60,
                     "preset": self.preset_used, "encoder": self.encoder, "container": self.container,
-                    "backends": dict(self.backends),
+                    "audio": self._audio_status(), "backends": dict(self.backends),
                     "monitors": list(self.monitors), "fps": self.cfg["fps"], "error": self.error, "ready": self.ready,
                     "resolution": self._resolution()}
 
@@ -95,6 +95,13 @@ class Recorder:
             return None
         _, (_, _, w, h) = capture_region(self.monitors[0], self.cfg["crop_taskbar"])
         return target_size(w, h, self.cfg["downscale_factor"])
+
+    def _audio_status(self):
+        if not self.audio_codec:
+            return None
+        cap = next((e.audio for e in self.encoders if getattr(e, "audio", None)), None)
+        info = cap.status() if cap else {"device": None, "mode": "idle", "peak": 0.0}
+        return {"codec": self.audio_codec, "kbps": AUDIO_KBPS[self.audio_codec][self.cfg["quality"]], **info}
 
     def _notify(self):
         for fn in list(self._listeners):
@@ -131,6 +138,7 @@ class Recorder:
                 else f"it can't hold {codec}"
             log("INIT", f"{chosen} unavailable ({why}), saving as {CONTAINER_INFO[self.container][0]} instead", "YELLOW")
         log("INIT", f"File format: {CONTAINER_INFO[self.container][0]} (.{self.container})", "GREEN")
+        self._prepare_audio()
         self.backends = {}
         self._pick_monitors()
         if not self.monitors:
@@ -141,6 +149,32 @@ class Recorder:
             self.ready = True
             log("INIT", "Initialization complete. Ready to record", "CYAN")
         self._notify()
+
+    def _prepare_audio(self):
+        self.audio_codec, self._audio_failed = None, False
+        if not self.cfg["audio"]:
+            return
+        codec = audio_codec(self.cfg["audio_codec"], self.encoder, self.container)
+        if codec not in self.ff.audio_codecs():
+            log("WARN", f"Desktop audio is on, but this FFmpeg can't record {AUDIO_INFO[codec][0]}. Recording video only "
+                        "(run tools/fetch_ffmpeg.py to get the bundled FFmpeg).", "YELLOW")
+            return
+        self.audio_codec = codec
+        log("INIT", f"Desktop audio: {AUDIO_INFO[codec][0]} {AUDIO_KBPS[codec][self.cfg['quality']]} kbps", "GREEN")
+
+    def _start_audio(self):
+        """A running desktop-audio capture for the next file, or None (video still records without it)."""
+        try:
+            from .audio import AudioTrack
+            track = AudioTrack(build_audio_cmd(self.ff.ffmpeg, self.audio_codec, self.cfg["quality"]),
+                               self.cfg["audio_exclude_apps"])
+            track.start()
+            return track
+        except Exception as e:
+            if not self._audio_failed:
+                self._audio_failed = True
+                log("WARN", f"Desktop audio unavailable ({e}). Recording video only.", "YELLOW")
+            return None
 
     def _pick_monitors(self, quiet=False):
         """Re-read the display layout. Backends already forced to GDI stay on GDI."""
@@ -246,11 +280,21 @@ class Recorder:
         multi = len(self.monitors) > 1
         with self._lock:
             self.chunk_start = time.time()
-        for m in self.monitors:
+        for i, m in enumerate(self.monitors):
             path = chunk_name(folder, stamp, f"_mon{m.index}" if multi else "", self.container)
-            cmd = build_record_cmd(self.ff.ffmpeg, self.cfg, m, self.encoder, self.backends[m.device], path)
-            enc = Encoder(cmd, path, m.device)
-            enc.start()
+            # desktop audio goes in the first display's file only: one copy of the sound per chunk
+            track = self._start_audio() if self.audio_codec and i == 0 else None
+            cmd = build_record_cmd(self.ff.ffmpeg, self.cfg, m, self.encoder, self.backends[m.device], path,
+                                   piped_start=track.start_time if track else None)
+            mux = build_mux_cmd(self.ff.ffmpeg, track.path, path, self.encoder) if track else None
+            enc = Encoder(cmd, path, m.device, mux, track) if track else Encoder(cmd, path, m.device)
+            try:
+                enc.start()
+            except Exception:
+                if track:
+                    track.stop()
+                    track.close()
+                raise
             with self._lock:
                 self.encoders = self.encoders + [enc]  # tracked as soon as it runs, so an error still closes it
             log("RECORDING", path, "CYAN")
@@ -277,8 +321,12 @@ class Recorder:
         early = now - self.chunk_start < STARTUP_GRACE
         for e in dead:
             log("ERROR", f"ffmpeg stopped unexpectedly ({e.label}): {e.error_summary()}", "RED")
+            if early and getattr(e, "audio", None) and self.audio_codec:
+                # video must never stop because of audio: retry without it (until settings change or restart)
+                self.audio_codec = None
+                log("WARN", "Recording again without desktop audio", "YELLOW")
             # GPU capture can fail on some setups (secure desktop, driver resets); GDI capture always works
-            if early and self.backends.get(e.label) == "ddagrab":
+            elif early and self.backends.get(e.label) == "ddagrab":
                 self.backends[e.label] = "gdigrab"
                 log("WARN", f"Switching {e.label} to GDI capture", "YELLOW")
         self._close_chunk("Restarting recording")

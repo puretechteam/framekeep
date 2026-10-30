@@ -1,0 +1,99 @@
+{
+ "library": {
+  "pystray": {
+   "import_cold_ms": 53.2,
+   "import_with_pil_ms": 21.35,
+   "startup_to_visible_ms": 113.95,
+   "private_bytes_added_kb": 5668.0,
+   "working_set_added_kb": 9500.0,
+   "threads_added": 1,
+   "icon_update_states_median_ms": 2.589,
+   "icon_update_states_p95_ms": 3.504,
+   "icon_update_fresh_median_ms": 2.57,
+   "icon_update_fresh_p95_ms": 3.942
+  },
+  "puretech_tray": {
+   "import_cold_ms": 25.92,
+   "import_with_pil_ms": 12.11,
+   "startup_to_visible_ms": 27.37,
+   "private_bytes_added_kb": 2216.0,
+   "working_set_added_kb": 5324.0,
+   "threads_added": 1,
+   "icon_update_states_median_ms": 0.213,
+   "icon_update_states_p95_ms": 0.735,
+   "icon_update_fresh_median_ms": 0.241,
+   "icon_update_fresh_p95_ms": 0.771
+  },
+  "installed": {
+   "pystray_bytes": 142616,
+   "six_bytes": 38105,
+   "pystray_plus_six_bytes": 180721,
+   "pillow_bytes": 6096558,
+   "puretech_tray_bytes": 103732
+  },
+  "setup": {
+   "date": "2026-10-30",
+   "python": "3.13.2",
+   "windows": "10.0.26200",
+   "machine": "Intel64 Family 6 Model 151 Stepping 2, GenuineIntel",
+   "pystray": "0.19.5",
+   "six": "1.17.0",
+   "pillow": "10.4.0",
+   "runs": 7,
+   "updates_per_run": 200,
+   "fresh_updates_per_run": 50,
+   "method": "fresh subprocess per sample, libraries alternated; medians. RAM and threads are deltas from a baseline taken after Pillow drew the test icons, measured 1 s after the icon became visible. 'states' cycles 4 pre-drawn icons (the FrameKeep pattern); 'fresh' sets 50 never-seen icons. Installed size counts package files and dist-info, without __pycache__."
+  }
+ },
+ "framekeep_app": {
+  "method": "tools/measure.py run --parts app, same PC, same scratch Python 3.13 venv (no NumPy), only the tray library differs; 15 s warm-up then 45 s of 1 s samples",
+  "pystray": {
+   "tray": {
+    "private_mb_mean": 22.6,
+    "private_mb_peak": 22.6,
+    "working_set_mb_mean": 39.0,
+    "cpu_percent": 0.0,
+    "ctx_switches_per_s": 5.6
+   },
+   "window": {
+    "private_mb_mean": 34.2,
+    "private_mb_peak": 34.2,
+    "working_set_mb_mean": 62.1,
+    "cpu_percent": 0.01,
+    "ctx_switches_per_s": 61.2
+   }
+  },
+  "puretech_tray": {
+   "tray": {
+    "private_mb_mean": 19.0,
+    "private_mb_peak": 19.0,
+    "working_set_mb_mean": 34.8,
+    "cpu_percent": 0.0,
+    "ctx_switches_per_s": 5.4
+   },
+   "window": {
+    "private_mb_mean": 31.5,
+    "private_mb_peak": 31.5,
+    "working_set_mb_mean": 58.9,
+    "cpu_percent": 0.0,
+    "ctx_switches_per_s": 17.5
+   }
+  },
+  "puretech_tray_and_player": {
+   "tray": {
+    "private_mb_mean": 18.9,
+    "private_mb_peak": 18.9,
+    "working_set_mb_mean": 35.1,
+    "cpu_percent": 0.0,
+    "ctx_switches_per_s": 5.1
+   },
+   "window": {
+    "private_mb_mean": 31.1,
+    "private_mb_peak": 31.1,
+    "working_set_mb_mean": 58.3,
+    "cpu_percent": 0.0,
+    "ctx_switches_per_s": 17.6
+   }
+  }
+ }
+}

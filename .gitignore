@@ -10,3 +10,14 @@ __pycache__/
 build/
 dist/
 dist-new/
+.venv/
+.cache/
+
+# secrets and local junk
+.env*
+!.env.example
+*.key
+*.pem
+*.log
+.DS_Store
+.idea/

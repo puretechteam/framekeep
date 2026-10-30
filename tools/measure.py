@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 """Before/after performance measurements for FrameKeep releases (dev tool, needs `pip install psutil`).
 
@@ -20,7 +20,7 @@ Everything is written under build/perf (a private APPDATA, outputs and recording
 the real FrameKeep data folder or any recordings folder.
 """
 
-import argparse, json, math, os, platform, re, shutil, subprocess, sys, time
+import argparse, json, os, platform, re, shutil, subprocess, sys, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PERF = os.path.join(ROOT, "build", "perf")
@@ -238,6 +238,10 @@ def watch(proc, seconds, every=1.0, children=False):
     """Private memory (mean/peak MB), CPU % of the whole PC and context switches/s of a process over `seconds`."""
     import psutil
     ps = psutil.Process(proc.pid)
+    # A venv's python.exe on Windows is a launcher that runs the real interpreter as its child: measure that one
+    real = [k for k in ps.children() if k.name().lower().startswith("python")]
+    if real and ps.memory_info().private < 8 * 2**20:
+        ps = real[0]
     def procs():
         out = [ps]
         if children:
@@ -314,7 +318,7 @@ def app(repo, cfg, seconds=45, warmup=15):
         time.sleep(warmup)
         r = {"app": watch(proc, seconds)}
         if record:
-            kids = psutil.Process(proc.pid).children(recursive=True)
+            kids = [k for k in psutil.Process(proc.pid).children(recursive=True) if "ffmpeg" in k.name().lower()]
             r["ffmpeg"] = {"private_mb": round(sum(k.memory_info().private for k in kids) / 2**20, 1),
                            "working_set_mb": round(sum(k.memory_info().rss for k in kids) / 2**20, 1)}
         for k in psutil.Process(proc.pid).children(recursive=True):
@@ -327,13 +331,19 @@ def app(repo, cfg, seconds=45, warmup=15):
     shutil.rmtree(rec, ignore_errors=True)
     return results
 
+def repo_label(repo):
+    """The measured checkout as a path inside this repo, or just its folder name: a path outside it would carry
+    the user's home folder into the published results."""
+    rel = os.path.relpath(os.path.abspath(repo), ROOT)
+    return os.path.basename(os.path.abspath(repo)) if rel.startswith("..") else rel.replace("\\", "/")
+
 def run(args):
     if not os.path.exists(SAMPLE):
         sys.exit("Make the sample first: python tools/measure.py sample")
     fk = load_framekeep(args.repo)
     cfg = fk.config.validate(dict(fk.config.DEFAULT_CONFIG))
     parts = args.parts.split(",")
-    report = {"version": fk.__version__, "repo": os.path.relpath(os.path.abspath(args.repo), ROOT).replace("\\", "/"), "date": time.strftime("%Y-%m-%d %H:%M"),
+    report = {"version": fk.__version__, "repo": repo_label(args.repo), "date": time.strftime("%Y-%m-%d %H:%M"),
               "machine": {"cpu": platform.processor(), "threads": os.cpu_count(), "os": platform.platform()},
               "ffmpeg": subprocess.run([FFMPEG, "-hide_banner", "-version"], capture_output=True, text=True).stdout.split("\n")[0],
               "sample": {"file": os.path.relpath(SAMPLE, ROOT), "seconds": SECONDS, "fps": FPS, "size": f"{W}x{H}"},

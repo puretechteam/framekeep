@@ -4,7 +4,7 @@ REM FrameKeep Dependency Installer
 REM -------------------------------
 
 REM --- License / Source Notice ---
-echo FrameKeep - (C) 2025 Tanner Lucier
+echo FrameKeep - (C) 2025 Pure Tech
 echo Licensed under the MIT License - see LICENSE file for details
 echo.
 
@@ -30,7 +30,7 @@ IF ERRORLEVEL 1 (
 )
 
 echo.
-echo Downloading FFmpeg (H.266, AV1 and the built-in player)...
+echo Downloading FFmpeg (H.266, AV1, audio and cameras)...
 python tools\fetch_ffmpeg.py
 IF ERRORLEVEL 1 (
     echo FFmpeg download failed. You can also point FrameKeep at your own ffmpeg.exe in Settings.

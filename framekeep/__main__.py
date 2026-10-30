@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 
 import argparse, ctypes, sys
@@ -8,7 +8,7 @@ def main():
     # Pillow imports NumPy whenever it's installed (only for type hints), and NumPy's math library then commits
     # ~30 MB per CPU thread up front: about 0.5 GB on a 16-thread PC, for a module FrameKeep never uses.
     sys.modules.setdefault("numpy", None)
-    parser = argparse.ArgumentParser(prog="framekeep", description="Low-power, low-storage screen recorder")
+    parser = argparse.ArgumentParser(prog="framekeep", description="Low-power, low-storage screen and camera recorder")
     parser.add_argument("--version", action="version", version=f"FrameKeep {__version__}")
     parser.add_argument("--no-gui", action="store_true", help="tray icon and console only, like v2")
     parser.add_argument("--minimized", action="store_true", help="start hidden in the tray")

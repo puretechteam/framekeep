@@ -1,18 +1,21 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 
-import ctypes, gc, os, queue, subprocess, threading
-from . import APP_NAME, autostart, stats, winproc
+import ctypes, gc, os, queue, subprocess, threading, time
+from . import APP_NAME, autostart, cleanup, motion, playback, stats, winproc
 from .config import DEFAULT_CONFIG, load_config, save_config, validate
 from .hotkeys import Hotkeys
 from .log import log
 from .recorder import Recorder
+from .station import Station
 from .tray import Tray
 from .watchers import Watcher
 
 kernel32 = ctypes.windll.kernel32
 ERROR_ALREADY_EXISTS = 183
 SHOW_EVENT = f"Local\\{APP_NAME}_show"
+STORAGE_CHECK = 600         # seconds between checks of how much space recordings use
+CLEANUP_EVERY = 3600        # seconds between runs of the optional camera footage cleanup
 
 def claim_single_instance():
     """True if this is the only FrameKeep running. Otherwise asks the running one to show its window."""
@@ -37,6 +40,8 @@ class App:
         self.cfg = loaded or validate(dict(DEFAULT_CONFIG))
         self.gui, self.minimized = gui, minimized
         self.recorder = Recorder(self.cfg)
+        self.station = Station(self.cfg, on_motion=self._motion_alert)
+        self.storage = {"bytes": None, "over": False}   # what the recordings use, and whether it's past the warning
         self.watcher = Watcher(self.recorder, lambda: self.cfg)
         self.hotkeys = Hotkeys()
         self.tray = Tray(self)
@@ -45,15 +50,18 @@ class App:
         self._closing = False
         self._told_about_tray = False
         self.recorder.subscribe(self._on_status)
+        self.station.subscribe(lambda: self.tray.refresh_cameras())
 
     # ---- lifecycle ---------------------------------------------------------
     def run(self):
         self.recorder.start_thread()
+        self.station.start()
         self.watcher.start()
         self._bind_hotkeys()
         self.tray.start()
         threading.Thread(target=self._wait_for_show_requests, daemon=True).start()
         threading.Thread(target=stats.prune_thumbs, daemon=True).start()
+        threading.Thread(target=self._housekeeping, name="housekeeping", daemon=True).start()
         if self.cfg["record_on_launch"] and self.cfg["onboarded"] and self.cfg["log_root"]:
             self.recorder.start()
         if self.gui:
@@ -86,13 +94,14 @@ class App:
         from .gui.app import MainWindow
         self.window = MainWindow(self)
 
-    def close_window(self):
+    def close_window(self, quiet=False):
         """Close to the tray: destroy the window (Tk thread only). FrameKeep keeps running."""
         if self.window is not None:
             self.window.destroy()
-        if not self._told_about_tray:
+        if not quiet and not self._told_about_tray:
             self._told_about_tray = True
-            self.tray.notify("FrameKeep is still running in the tray. Right-click the icon to quit.")
+            self.tray.notify("FrameKeep is still running in the tray. Right-click the icon for more.",
+                             actions=[("Open FrameKeep", self.show_window), ("Quit", self.quit)])
 
     def _release_ui(self):
         from .gui import theme
@@ -134,6 +143,7 @@ class App:
         self.hotkeys.stop()
         self.watcher.stop()
         self.recorder.shutdown()
+        self.station.shutdown()
         self.tray.stop()
         window = self.window
         self.ui_queue.put(window.destroy if window else (lambda: None))  # wakes the main thread so it can exit
@@ -152,19 +162,76 @@ class App:
         if changed:
             log("CONFIG", "Settings saved", "GREEN")
             self.recorder.apply_config(new_cfg)
+            self.station.apply_config(new_cfg)
             self._bind_hotkeys()
+            self.tray.refresh_cameras()
 
     def _bind_hotkeys(self):
-        self.hotkeys.set({self.cfg["hotkey_toggle"]: self.recorder.toggle, self.cfg["hotkey_pause"]: self.recorder.toggle_pause})
+        self.hotkeys.set({self.cfg["hotkey_toggle"]: self.recorder.toggle, self.cfg["hotkey_pause"]: self.recorder.toggle_pause,
+                          self.cfg["hotkey_cameras"]: self.station.toggle_hotkey})
+
+    # ---- storage -----------------------------------------------------------
+    def _housekeeping(self):
+        """Every 10 minutes: how much space recordings use (warning once past the limit). Every hour, if the user
+        turned it on: delete old camera footage."""
+        last_cleanup = 0.0
+        while not self._closing:
+            cfg = self.cfg
+            try:
+                if cfg["camera_cleanup"] and time.time() - last_cleanup >= CLEANUP_EVERY:
+                    last_cleanup = time.time()
+                    cleanup.run(cfg, active=self.station.active_files())
+                self.check_storage(cfg)
+            except Exception as e:
+                log("ERROR", f"Storage check failed: {e!r}", "RED")
+            for _ in range(STORAGE_CHECK):
+                if self._closing:
+                    return
+                time.sleep(1)
+
+    def check_storage(self, cfg=None):
+        cfg = cfg or self.cfg
+        used = cleanup.usage(cfg)
+        limit = cfg["storage_warn_gb"] * 1024 ** 3
+        over = bool(limit) and used >= limit
+        if over and not self.storage["over"]:
+            self.tray.notify(f"FrameKeep's recordings now use {stats.human_bytes(used)}, past your "
+                             f"{cfg['storage_warn_gb']} GB warning.", title="Disk space",
+                             actions=[("Open settings", lambda: self.show_window("settings"))])
+            log("STORAGE", f"Recordings use {stats.human_bytes(used)} (warning at {cfg['storage_warn_gb']} GB)", "YELLOW")
+        changed = over != self.storage["over"]
+        self.storage = {"bytes": used, "over": over}
+        if changed:
+            self.tray.update()   # the warning badge
 
     # ---- cross-thread plumbing ---------------------------------------------
     def _on_status(self, status):
         self.tray.update(status)
         self.watcher.wake()   # recording started/stopped or settings changed
 
-    def show_window(self):
+    def show_window(self, page=None):
         if self.gui:
             self.ui_queue.put(self._open_window)
+            if page:
+                self.ui_queue.put(lambda: self.window and self.window.show_page(page))
+
+    def _motion_alert(self, cam, t):
+        """A camera with notifications on saw motion: offer to watch it from just before it started, or pause it."""
+        cam_id = cam["id"]
+        self.tray.notify(f"Started at {time.strftime('%H:%M:%S', time.localtime(t))}", title=f"Motion: {cam['name']}",
+                         actions=[("Play", lambda: self.play_motion(cam_id, t)),
+                                  ("Pause camera", lambda: self.station.pause(cam_id, True))],
+                         on_click=lambda: self.play_motion(cam_id, t))
+
+    def play_motion(self, cam_id, t):
+        """Play a camera's footage from just before time t (in whichever chunk holds it, even after it rolled over)."""
+        rec = self.station.recorders.get(cam_id)
+        if not rec or not rec.folder():
+            return
+        day = os.path.join(rec.folder(), time.strftime("%Y-%m-%d", time.localtime(t)))
+        path, offset = motion.locate(t, [c["path"] for c in stats.list_chunks(day)])
+        if path:
+            self.open_recording(path, at=offset)
 
     def _wait_for_show_requests(self):
         event = kernel32.CreateEventW(None, False, False, SHOW_EVENT)
@@ -184,16 +251,33 @@ class App:
             self._call(fn)
 
     # ---- recordings --------------------------------------------------------
-    def open_recording(self, path, codec=None):
-        """Play a recording. H.265/H.266 go to the bundled ffplay unless the user prefers the system player."""
-        ff = self.recorder.ff
-        player = self.cfg["player"]
-        builtin = player == "builtin" or (player == "auto" and codec in ("hevc", "vvc"))
-        if builtin and ff.ffplay:
-            subprocess.Popen([ff.ffplay, "-hide_banner", "-loglevel", "error", "-window_title", os.path.basename(path), path],
-                             creationflags=0x08000000)
-        else:
+    def open_recording(self, path, codec=None, at=None):
+        """Play a recording in the FrameKeep player (its day, from that file), or in the Windows default app if the
+        user prefers it or the file isn't in a FrameKeep folder. at: seconds into the file (a motion event: playback
+        starts 2 s before it)."""
+        source, day = playback.locate(self.cfg, path)
+        start = playback.wall_time(path, (at - 2) if at else 0)
+        if self.cfg["player"] == "system" or not self.gui or source is None or start is None:
             os.startfile(path)
+            return
+        self.open_player([source], day, start)
+
+    def open_player(self, sources=None, day=None, at=None):
+        """Open the player (from any thread). With no main window, a hidden one hosts it."""
+        def show():
+            if self._closing:
+                return
+            if self.window is None:
+                from .gui.app import MainWindow
+                self.window = MainWindow(self, hidden=True)
+            self.window.open_player(sources, day, at)
+        self.ui_queue.put(show)
+
+    def save_view_state(self, **changes):
+        """Save player layouts and the last view: written to the config only, so recording carries on untouched
+        (save_settings would start a new file)."""
+        self.cfg = validate(self.cfg | changes)
+        save_config(self.cfg)
 
     @staticmethod
     def show_in_folder(path):

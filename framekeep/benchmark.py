@@ -1,11 +1,11 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 """Measure every preset on the user's own screen. Works only in AppData, never in the recordings folder."""
 
-import datetime, json, os, re, shutil, subprocess, threading, time
+import array, datetime, json, math, os, re, shutil, subprocess, threading, time
 from . import winproc
-from .engine import (FFmpeg, POPEN_FLAGS, PRESET_CHAINS, PRESET_INFO, cap_kbps, capture_args, encoder_args, output_pix_fmt,
-                     target_size, video_filters)
+from .engine import (AUDIO_INFO, AUDIO_PIPE_INPUT, FFmpeg, POPEN_FLAGS, PRESET_CHAINS, PRESET_INFO, audio_args, audio_codec,
+                     cap_kbps, capture_args, encoder_args, output_pix_fmt, resolve_container, target_size, video_filters)
 from .log import log
 from .monitors import list_monitors, select_monitors
 from .paths import BENCHMARK_DIR, BENCHMARK_FILE
@@ -30,18 +30,13 @@ def capture_sample(ff, cfg, seconds, monitor):
         raise RuntimeError(f"Sample capture failed: {p.stderr.strip()[-300:]}")
     return src, (tw, th)
 
-def encode_one(ff, cfg, src, encoder, seconds, vmaf, size):
-    """Encode the sample exactly as a live recording would (same quality and bitrate cap)."""
-    out = os.path.join(BENCHMARK_DIR, f"{encoder}.mp4")
-    cap = cap_kbps(*size, cfg["fps"], encoder) if cfg["bitrate_cap"] else None
-    args = encoder_args(encoder, cfg["quality"], cfg["fps"], cap)
-    vf = f"format={output_pix_fmt(args)}"
+def _encode(ff, args, timeout=3600):
+    """Run one ffmpeg -benchmark encode: (wall seconds, CPU seconds, peak RAM in MB or None), or None on failure."""
     t = time.time()
-    p = subprocess.Popen([ff.ffmpeg, "-hide_banner", "-y", "-benchmark", "-i", src, "-vf", vf, "-fps_mode", "passthrough", *args, out],
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace",
-                         creationflags=POPEN_FLAGS)
+    p = subprocess.Popen([ff.ffmpeg, "-hide_banner", "-y", "-benchmark", *args], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace", creationflags=POPEN_FLAGS)
     try:
-        _, stderr = p.communicate(timeout=3600)
+        _, stderr = p.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         p.kill()
         return None
@@ -49,8 +44,63 @@ def encode_one(ff, cfg, src, encoder, seconds, vmaf, size):
     if p.returncode != 0:
         return None
     m = re.search(r"utime=([\d.]+)s\s+stime=([\d.]+)s", stderr)
-    cpu = float(m.group(1)) + float(m.group(2)) if m else wall
     ram = re.search(r"maxrss=(\d+)KiB", stderr)
+    return wall, float(m.group(1)) + float(m.group(2)) if m else wall, round(int(ram.group(1)) / 1024) if ram else None
+
+def audio_sample(seconds):
+    """A fixed stand-in for desktop sound (48 kHz float stereo), the same on every PC: a third chords and a melody,
+    a third noisy speech-like bursts, a third silence. Repeats a 3 s phrase so it's quick to build in Python."""
+    rate, phrase, seed = 48000, [], 12345
+    for i in range(rate * 3):
+        t = i / rate
+        part = int(t)                       # 0 music, 1 speech-like, 2 silence
+        if part == 0:
+            note = 220 * 2 ** ((int(t * 4) % 5) / 12)
+            v = 0.15 * (math.sin(2 * math.pi * note * t) + 0.5 * math.sin(2 * math.pi * 1.5 * note * t)
+                        + 0.3 * math.sin(2 * math.pi * 880 * t) * math.exp(-6 * (t % 0.25)))
+            left, right = v, v * 0.9
+        elif part == 1:
+            seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+            v = (seed / 0x7FFFFFFF - 0.5) * 0.3 * max(0.0, math.sin(2 * math.pi * 4 * t))
+            left = right = v + 0.05 * math.sin(2 * math.pi * 180 * t)
+        else:
+            left = right = 0.0
+        phrase += (left, right)
+    data = array.array("f", phrase).tobytes()
+    reps = max(1, math.ceil(seconds / 3))
+    path = os.path.join(BENCHMARK_DIR, "audio.f32")
+    with open(path, "wb") as f:
+        f.write(data * reps)
+    return path, reps * 3
+
+def encode_audio(ff, codec, quality, src, seconds):
+    """Cost of a desktop-audio track: size, CPU and the audio encoder's RAM."""
+    out = os.path.join(BENCHMARK_DIR, f"audio-{codec}.mka")
+    res = _encode(ff, [*AUDIO_PIPE_INPUT, "-i", src, *audio_args(codec, quality), out], timeout=600)
+    if not res:
+        return None
+    _, cpu, ram = res
+    kbps = os.path.getsize(out) * 8 / seconds / 1000
+    return {"codec": codec, "kbps": round(kbps, 1), "cpu_percent": round(cpu / seconds / (os.cpu_count() or 1) * 100, 2),
+            "ram_mb": ram}
+
+def with_audio(r, a):
+    """A preset's result with its audio track's cost added (audio is encoded in its own small FFmpeg)."""
+    kbps = r["kbps"] + a["kbps"]
+    return r | {"kbps": round(kbps, 1), "mb_per_hour": round(kbps * 3600 / 8 / 1000, 1),
+                "cpu_percent": round(r["cpu_percent"] + a["cpu_percent"], 1),
+                "ram_mb": (r["ram_mb"] or 0) + (a["ram_mb"] or 0) or None, "audio": a}
+
+def encode_one(ff, cfg, src, encoder, seconds, vmaf, size):
+    """Encode the sample exactly as a live recording would (same quality and bitrate cap)."""
+    out = os.path.join(BENCHMARK_DIR, f"{encoder}.mp4")
+    cap = cap_kbps(*size, cfg["fps"], encoder) if cfg["bitrate_cap"] else None
+    args = encoder_args(encoder, cfg["quality"], cfg["fps"], cap)
+    vf = f"format={output_pix_fmt(args)}"
+    res = _encode(ff, ["-i", src, "-vf", vf, "-fps_mode", "passthrough", *args, out])
+    if not res:
+        return None
+    wall, cpu, ram = res
     size = os.path.getsize(out)
     score = None
     if vmaf:
@@ -62,7 +112,7 @@ def encode_one(ff, cfg, src, encoder, seconds, vmaf, size):
     kbps = size * 8 / seconds / 1000
     return {"encoder": encoder, "kbps": round(kbps, 1), "mb_per_hour": round(kbps * 3600 / 8 / 1000, 1),
             "cpu_percent": round(cpu / seconds / (os.cpu_count() or 1) * 100, 1), "realtime": round(seconds / max(wall, 0.01), 1),
-            "vmaf": score, "ram_mb": round(int(ram.group(1)) / 1024) if ram else None}
+            "vmaf": score, "ram_mb": ram}
 
 def ram_limit_mb():
     return winproc.physical_memory() / 2**20 * RAM_SHARE or float("inf")
@@ -114,6 +164,9 @@ def explain(report):
     why = reasons(results, rec)
     for _, p in sorted(beaten):
         text += f" {PRESET_INFO[p][0]} is smaller, but {why[p][1][0].lower() + why[p][1][1:]}."
+    if report.get("audio"):
+        parts = [f"{AUDIO_INFO[c][0]} {a['kbps']:.0f} kbps" for c, a in sorted(report["audio"].items())]
+        text += f" Sizes, CPU and memory include desktop audio ({', '.join(parts)} on a fixed sound clip)."
     return text
 
 def is_running():
@@ -138,17 +191,31 @@ def _run(cfg, seconds, progress):
     vmaf = "libvmaf" in ff.run(["-filters"]).stdout
     presets = [(p, next((e for e in chain if ff.works(e)), None)) for p, chain in PRESET_CHAINS.items()]
     presets = [(p, e) for p, e in presets if e]
-    results = {}
+    results, audio = {}, {}
+    if cfg["audio"]:
+        wanted = {audio_codec(cfg["audio_codec"], e, resolve_container(cfg["container"], e)) for _, e in presets}
+        if wanted & ff.audio_codecs():
+            progress("Measuring desktop audio", 0.18)
+            clip, clip_seconds = audio_sample(seconds)
+            for codec in sorted(wanted & ff.audio_codecs()):
+                a = encode_audio(ff, codec, cfg["quality"], clip, clip_seconds)
+                if a:
+                    audio[codec] = a
+                    log("BENCH", f"Audio {AUDIO_INFO[codec][0]:<5} {a['kbps']:>6} kbps  CPU {a['cpu_percent']}%  "
+                                 f"RAM {a['ram_mb']} MB", "MAGENTA")
     for i, (preset, encoder) in enumerate(presets):
         progress(f"Encoding with {PRESET_INFO[preset][0]} ({PRESET_INFO[preset][1]})", 0.2 + 0.8 * i / len(presets))
         r = encode_one(ff, cfg, src, encoder, seconds, vmaf, size)
         if r:
+            codec = audio_codec(cfg["audio_codec"], encoder, resolve_container(cfg["container"], encoder))
+            if codec in audio:
+                r = with_audio(r, audio[codec])
             results[preset] = r
             log("BENCH", f"{PRESET_INFO[preset][0]:<10} {r['mb_per_hour']:>7} MB/hr  CPU {r['cpu_percent']}%  "
                          f"RAM {r['ram_mb']} MB  VMAF {r['vmaf']}", "MAGENTA")
     shutil.rmtree(BENCHMARK_DIR, ignore_errors=True)
     report = {"date": datetime.datetime.now().isoformat(timespec="seconds"), "seconds": seconds, "fps": cfg["fps"],
-              "downscale_factor": cfg["downscale_factor"], "quality": cfg["quality"], "results": results,
+              "downscale_factor": cfg["downscale_factor"], "quality": cfg["quality"], "audio": audio, "results": results,
               "recommended": recommend(results)}
     with open(BENCHMARK_FILE, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)

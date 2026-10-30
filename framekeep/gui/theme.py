@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 
 import functools, os
@@ -32,7 +32,7 @@ STATE_STYLE = {   # state -> (label, color)
 REASON_TEXT = {"idle": "you're away", "locked": "the screen is locked", "private": "a private app is in focus"}
 
 ICONS = {
-    "dashboard": 0xECA5, "recordings": 0xE8B2, "settings": 0xE713, "benchmark": 0xEC4A, "logs": 0xE8FD,
+    "dashboard": 0xECA5, "recordings": 0xE8B2, "cameras": 0xE722, "settings": 0xE713, "benchmark": 0xEC4A, "logs": 0xE8FD,
     "pause": 0xE769, "play": 0xE768, "folder": 0xE8B7, "open_folder": 0xED25, "share": 0xE72D, "lock": 0xE72E,
     "privacy": 0xED1A, "idle": 0xE823, "drive": 0xEDA2, "monitor": 0xE7F4, "bolt": 0xE945, "leaf": 0xE8BE,
     "info": 0xE946, "warning": 0xE7BA, "check": 0xE73E, "keyboard": 0xE765, "calendar": 0xE787, "timer": 0xE916,

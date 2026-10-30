@@ -87,7 +87,7 @@ def test_library_summary_caches_finished_days(tmp_path, monkeypatch):
 
 def os_stat_bump(path):
     """Some file systems keep coarse folder mtimes; make sure the change is visible."""
-    import os, time
+    import os
     st = os.stat(path)
     os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
 

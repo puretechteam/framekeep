@@ -1,4 +1,4 @@
-# FrameKeep - (C) 2025 Tanner Lucier
+# FrameKeep - (C) 2025 Pure Tech
 # Licensed under the MIT License
 
 import customtkinter as ctk
@@ -9,13 +9,17 @@ from .theme import ACCENT, BORDER, CARD_HI, MUTED, SIDEBAR, STATE_STYLE, TEXT, f
 
 theme.apply_theme()
 
-NAV = [("dashboard", "Dashboard"), ("recordings", "Recordings"), ("settings", "Settings"),
+NAV = [("dashboard", "Dashboard"), ("recordings", "Recordings"), ("cameras", "Cameras"), ("settings", "Settings"),
        ("benchmark", "Benchmark"), ("logs", "Logs")]
 
 class MainWindow(ctk.CTk):
-    def __init__(self, app):
+    def __init__(self, app, hidden=False):
+        """hidden: start withdrawn, as the root of a player window opened from the tray."""
         super().__init__()
+        if hidden:
+            self.withdraw()
         self.app = app
+        self.player = None
         self.title("FrameKeep")
         self.geometry("1180x760")
         self.minsize(980, 640)
@@ -85,7 +89,8 @@ class MainWindow(ctk.CTk):
     def show_page(self, key):
         if key not in self.pages:
             from . import pages
-            cls = {"dashboard": pages.DashboardPage, "recordings": pages.RecordingsPage, "settings": pages.SettingsPage,
+            cls = {"dashboard": pages.DashboardPage, "recordings": pages.RecordingsPage, "cameras": pages.CamerasPage,
+                   "settings": pages.SettingsPage,
                    "benchmark": pages.BenchmarkPage, "logs": pages.LogsPage}[key]
             self.pages[key] = cls(self.content, self)
         if self.current and self.current != key:
@@ -111,11 +116,29 @@ class MainWindow(ctk.CTk):
             page.on_show()  # numbers were frozen while hidden; refresh them immediately
 
     def hide_to_tray(self):
-        """Closing the window destroys it to free its memory. It's rebuilt the next time it's opened."""
+        """Closing the window destroys it to free its memory. It's rebuilt the next time it's opened. While the
+        player is open the window only hides, since the player lives on it."""
         for page in self.pages.values():
             if hasattr(page, "on_hide"):
                 page.on_hide()
+        if self.player is not None:
+            self.withdraw()
+            return
         self.app.close_window()
+
+    def open_player(self, sources=None, day=None, at=None):
+        if self.player is None:
+            from .player import PlayerWindow
+            self.player = PlayerWindow(self, self.app)
+        self.player.deiconify()
+        self.player.lift()
+        self.player.focus_force()
+        self.player.load(sources, day, at)
+
+    def player_closed(self):
+        self.player = None
+        if self.state() == "withdrawn":
+            self.app.close_window(quiet=True)   # nobody is looking at the main window: free it too
 
     def _wizard_done(self):
         self.app.first_run = False
