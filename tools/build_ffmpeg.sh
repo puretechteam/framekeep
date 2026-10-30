@@ -63,6 +63,12 @@ fi
 if [ ! -f "$PREFIX/lib/pkgconfig/harfbuzz.pc" ]; then
     rm -rf freetype harfbuzz
     git clone --depth 1 --branch "$FREETYPE_TAG" https://gitlab.freedesktop.org/freetype/freetype.git freetype
+    # FreeType's meson.build looks bzip2 up with required: false, ignoring -Dbzip2=disabled, and then links
+    # libbz2-1.dll. Make the lookup obey the option.
+    sed -i "s/^bzip2_dep = dependency('bzip2', required: false)\$/bzip2_dep = dependency('bzip2', required: get_option('bzip2'))/" \
+        freetype/meson.build
+    grep -q "dependency('bzip2', required: get_option('bzip2'))" freetype/meson.build \
+        || { echo "FreeType's bzip2 lookup changed: check tools/build_ffmpeg.sh"; exit 1; }
     meson setup freetype freetype/build --prefix="$PREFIX" --libdir=lib --buildtype=release --default-library=static \
         -Dharfbuzz=disabled -Dpng=disabled -Dbzip2=disabled -Dbrotli=disabled -Dzlib=disabled -Dtests=disabled
     meson install -C freetype/build
