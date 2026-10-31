@@ -31,7 +31,7 @@ camera's own stream, kept as-is, costs 0.04% CPU. Motion detection found every t
 sensitivity, with no false events, for 0.05% of one core.
 
 Also new in 3.1: [desktop audio](#desktop-audio-new-in-31), off by default. Turned on, Opus at Balanced added 0.10% of
-the PC's CPU and 30 MB of memory (an upper bound: the audio encoder was the full FFmpeg). The video encoder's CPU
+the PC's CPU and about 18 MB of memory (17.6 MB with the bundled fk4 audio encoder; 30.4 MB with a full FFmpeg's). The video encoder's CPU
 didn't change. On a test mix that's a third tones, a third speech-like noise and a third silence, the sound took
 19.5 MB per hour.
 
@@ -211,7 +211,7 @@ is an upper bound.
 - **Compatible (H.264) + AAC 128k:** audio adds +0.070% CPU and +37.9 MB in total; the audio track averaged 71.5 kbps on the looping clip.
 - **Smallest (AV1) + Opus 48k:** audio adds +0.100% CPU and +30.4 MB in total; the audio track averaged 25.8 kbps on the looping clip.
 
-Video encoder CPU is the same within run-to-run noise. Its memory rose 6 MB for H.264 when writing to the pipe, and 0.2 MB for AV1. The audio encoder's ~21 MB is the full FFmpeg; the bundled minimal build's muxer takes 7.5–9 MB, so expect the fk4 audio encoder in the same range and the total near 17 MB. That will be re-measured once fk4 is built.
+Video encoder CPU is the same within run-to-run noise. Its memory rose 6 MB for H.264 when writing to the pipe, and 0.2 MB for AV1. The audio encoder above was the full FFmpeg. Measured again with the bundled fk4 (`tools/measure_audio.py`'s fixed sound encoded live for 20 s, peak private memory, median of 5): Opus 48k 8.9 MB against 21.7 MB, AAC 128k 9.6 MB against 22.4 MB. So with FrameKeep's own FFmpeg, audio adds 17.6 MB in total with Opus and 25.1 MB with AAC.
 
 **Limited to 2 CPU cores** (Smallest + Opus, everything pinned to 2 logical CPUs, like an old dual-core): video 60.8 s and audio 60.049 s from a 60 s recording, total CPU 0.91% of this 16-thread PC.
 

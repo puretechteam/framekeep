@@ -11,14 +11,14 @@ Usage: python tools/fetch_ffmpeg.py [--force] [--zip PATH]
 
 import hashlib, io, os, shutil, sys, urllib.request, zipfile
 
-VERSION = "9.0.2-fk3"
+VERSION = "9.0.2-fk4"
 URL = f"https://github.com/puretechteam/framekeep/releases/download/ffmpeg-{VERSION}/framekeep-ffmpeg-{VERSION}-win64.zip"
-SHA256 = "3126b4762825bbc044f4b320fd171f22054ee8fb83933b563b547419d0bc4412"
+SHA256 = "d77c871df55aa838d6f1f70acfad4b0de444ea7dee65ff25ac1e1d2a2df800da"
 DEST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ffmpeg")
 STAMP = os.path.join(DEST, "VERSION")
 
 def download():
-    print(f"Downloading FFmpeg {VERSION} (~21 MB) from {URL}")
+    print(f"Downloading FFmpeg {VERSION} (~22 MB) from {URL}")
     buf = io.BytesIO()
     with urllib.request.urlopen(URL) as resp:
         total = int(resp.headers.get("Content-Length") or 0)

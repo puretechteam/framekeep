@@ -2,7 +2,7 @@ FrameKeep - (C) 2025 Pure Tech
 
 Licensed under the MIT License - see LICENSE file for details (v2.1.0 and earlier were released under GPLv3)
 
-v3.1.0 Changelog
+v3.1.0 Changelog (2026-10-30)
 #
 Efficiency (every number measured against 3.0.0 on the same PC, FFmpeg and sample; tables, raw data and the commands to reproduce them are in docs/perf)
 - FrameKeep itself commits 96% less memory (520 MB to 21 MB in the tray) and holds 45% less in RAM (68 MB to 38 MB). Pillow imported NumPy whenever it was installed, which reserved about 0.5 GB for nothing. The .exe never bundled NumPy, but the other savings below apply to it too.
@@ -36,7 +36,7 @@ New
   - The bitrate follows the Quality level: Opus 96/48/32/24 kbps, AAC 160/128/96/64 kbps. Opus is variable bitrate and silence costs about 1 kbps (DTX).
   - Switching headphones or speakers is followed in the same file. Sound from apps you list (for example discord.exe) is left out: filtered on Windows 11, silenced while they play on Windows 10.
   - The dashboard shows the audio format, the device and a live level. Recordings shows the audio codec next to the video codec. The Benchmark adds each format's audio to its size, CPU and memory. Share copies keep the sound (AAC).
-  - Measured (docs/perf): Opus at Balanced is 19.5 MB per hour of a test mix that's a third tones, a third speech-like noise and a third silence (AAC 128 kbps: 40.3 MB), adds 0.10% of the PC's CPU (AAC 0.07%) and 30 MB of memory in total (measured with a full FFmpeg for the audio encoder; the bundled build is smaller), leaves the video encoder's CPU unchanged, and keeps up when limited to 2 CPU cores. Test beeps land in the file within a few milliseconds of when they actually played.
+  - Measured (docs/perf): Opus at Balanced is 19.5 MB per hour of a test mix that's a third tones, a third speech-like noise and a third silence (AAC 128 kbps: 40.3 MB), adds 0.10% of the PC's CPU (AAC 0.07%) and about 18 MB of memory in total (the bundled fk4 audio encoder takes 8.9 MB of it, against 21.7 MB for a full FFmpeg), leaves the video encoder's CPU unchanged, and keeps up when limited to 2 CPU cores. Test beeps land in the file within a few milliseconds of when they actually played.
   - Needs the bundled FFmpeg 9.0.2-fk4 (adds Opus, AAC and raw audio input). With an older FFmpeg, FrameKeep records video only and says so.
 - The bundled FFmpeg 9.0.2-fk4 also adds what cameras need: DirectShow input, RTSP/HTTP network input (TLS through Windows' own schannel), the segment muxer, denoise and drawtext (with FreeType and HarfBuzz).
 - The FrameKeep player replaces ffplay. Play anywhere in FrameKeep (or Open player on the Recordings page or in the tray) opens it:
@@ -59,7 +59,7 @@ New
 
 Changed
 - Settings > Player is now "FrameKeep player" or "Windows default app". Auto and Built-in become the FrameKeep player.
-- The bundled FFmpeg no longer includes ffplay or SDL2, and adds what the player needs (concat, showinfo, atempo, raw float audio out).
+- The bundled FFmpeg no longer includes ffplay or SDL2, and adds what the player needs (concat, select, showinfo, atempo, raw float audio out).
 - python -m framekeep --help says "screen and camera recorder".
 
 Fixes

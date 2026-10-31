@@ -132,7 +132,7 @@ If you need files that open everywhere with no fuss, pick **Compatible** (H.264)
 - Any quad-core CPU from roughly the last 10 years. Dual-cores over 2 GHz work with the lighter formats.
 - 4 GB RAM (8 GB recommended for Ultra). While recording, FrameKeep itself uses about 40 MB and the FFmpeg encoder
   roughly 250 MB (H.264), 430 MB (AV1) or 560 MB (H.266), measured as private memory on a 1080p display
-  ([details](docs/perf/README.md)). Desktop audio, if you turn it on, adds about 30 MB and well under 1% CPU.
+  ([details](docs/perf/README.md)). Desktop audio, if you turn it on, adds about 18 MB and well under 1% CPU.
   Each camera at 720p 15 FPS in AV1 adds about 310 MB and 2% CPU (of a 16-thread PC); a network camera kept as-is
   about 85 MB and almost no CPU.
   The dashboard's **Using now** tile shows your own numbers.
