@@ -12,6 +12,7 @@ gap (device switch, nothing playing) becomes silence and the two clocks can't dr
 
 import array, collections, ctypes, os, subprocess, sys, threading, time
 from ctypes import POINTER, byref, c_int, c_uint32, c_uint64, c_void_p, wintypes
+from . import winproc
 from .log import log
 from .monitors import GUID, _com, _release
 
@@ -575,6 +576,7 @@ class AudioTrack:
         try:
             self.proc = subprocess.Popen(self.encode_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                          stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+            winproc.own(self.proc)
         except OSError:
             kernel32.CloseHandle(self._pipe)
             raise

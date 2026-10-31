@@ -35,6 +35,7 @@ def _encode(ff, args, timeout=3600):
     t = time.time()
     p = subprocess.Popen([ff.ffmpeg, "-hide_banner", "-y", "-benchmark", *args], stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace", creationflags=POPEN_FLAGS)
+    winproc.own(p)
     try:
         _, stderr = p.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:

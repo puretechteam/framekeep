@@ -120,7 +120,9 @@ class RecordingsPage(ctk.CTkFrame):
         self.day_list.grid(row=1, column=0, sticky="nsw", padx=(28, 8), pady=(0, 28))
         self.grid_area = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.grid_area.grid(row=1, column=1, sticky="nsew", padx=(8, 20), pady=(0, 28))
-        self.bind("<Configure>", self._on_resize)  # the scrollable frame's own inner frame sizes to its content
+        # reflow when the visible part of the card grid resizes (the scrollable frame's own inner frame sizes to its
+        # content, and the page's <Configure> comes before the grid area has its new width)
+        self.grid_area._parent_canvas.bind("<Configure>", self._on_resize, add="+")
         self.day_buttons = {}
         self.empty = ctk.CTkLabel(self.grid_area, text="", font=font(14), text_color=MUTED)
 
@@ -144,7 +146,7 @@ class RecordingsPage(ctk.CTkFrame):
     def _camera(self):
         return next((c for c in self.app.cfg["cameras"] if c["name"] == self.source_var.get()), None)
 
-    def _root(self):
+    def _folder(self):
         """The folder whose day folders are listed: the recordings folder, or the chosen camera's folder."""
         cam, root = self._camera(), camera_root(self.app.cfg)
         if cam and root:
@@ -161,7 +163,7 @@ class RecordingsPage(ctk.CTkFrame):
         self.app.open_player([cam["id"] if cam else "desktop"], self.selected)
 
     def _open_root(self):
-        root = self._root()
+        root = self._folder()
         if root and os.path.isdir(root):
             os.startfile(root)
 
@@ -177,7 +179,7 @@ class RecordingsPage(ctk.CTkFrame):
         for w in self.day_list.winfo_children():
             w.destroy()
         self.day_buttons = {}
-        days = stats.list_days(self._root())
+        days = stats.list_days(self._folder())
         if not days:
             self._show_day(None)
             return
@@ -254,10 +256,8 @@ class RecordingsPage(ctk.CTkFrame):
         card = (self.cards[0].winfo_reqwidth() if self.cards else THUMB_W + 24) + 16
         return max(1, usable // card)
 
-    def _on_resize(self, event):
-        if event.widget is not self:
-            return
-        cols = self._columns(event.width)
+    def _on_resize(self, _event):
+        cols = self._columns(self.winfo_width())
         if cols != self.columns:
             self._layout(cols)
 

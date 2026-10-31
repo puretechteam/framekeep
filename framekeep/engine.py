@@ -2,7 +2,7 @@
 # Licensed under the MIT License
 
 import collections, datetime, json, os, shutil, subprocess, sys, threading
-from . import __version__
+from . import __version__, winproc
 from .log import log
 from .paths import FFMPEG_DIR
 
@@ -477,6 +477,7 @@ class Encoder:
         if not self.mux_cmd:
             self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=flags,
                                          stdout=subprocess.PIPE if self.reader else subprocess.DEVNULL)
+            winproc.own(self.proc)
             if self.reader:
                 threading.Thread(target=self.reader, args=(self.proc.stdout,), daemon=True).start()
         else:
@@ -486,9 +487,11 @@ class Encoder:
             try:
                 self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=write, stderr=subprocess.PIPE,
                                              creationflags=flags)
+                winproc.own(self.proc)
                 try:
                     self.mux = subprocess.Popen(self.mux_cmd, stdin=read, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                                                 creationflags=flags)
+                    winproc.own(self.mux)
                 except OSError:
                     self.proc.kill()
                     raise

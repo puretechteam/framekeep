@@ -2,7 +2,12 @@ FrameKeep - (C) 2025 Pure Tech
 
 Licensed under the MIT License - see LICENSE file for details (v2.1.0 and earlier were released under GPLv3)
 
-Unreleased
+v3.1.1 Changelog (2026-10-31)
+#
+Fixed
+- Opening Recordings closed FrameKeep with "Unhandled exception in script" (3.1.0). A new test opens the page and resizes it the way the app does, and another fails if any window reuses one of the interface toolkit's internal names.
+- If FrameKeep ever closes unexpectedly, its recordings now stop with it. In 3.1.0 they kept recording in the background with nothing left to stop them (one more after every restart), and Windows warned "Failed to remove temporary directory" because they were still using FrameKeep's files. In the test, a recorder left behind by a crash was still running 5 s later before this fix and gone at once after it. Files are saved every 5 seconds, so at most the last few seconds before a crash are lost.
+- On Recordings, the grid of recordings now gains or loses columns when you resize the window. It stayed at the width it opened with since 3.0.
 #
 Changed
 - The player now uses puretech-player 0.1.1, which keeps its clock on the frame you stepped to, so FrameKeep's own workaround for that is gone. Stepping and playing behave as before (tested: back one frame moves exactly 0.2 s at 5 FPS, and play continues from the stepped frame).
