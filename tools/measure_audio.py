@@ -12,8 +12,8 @@
       FFmpeg, and with audio the audio encoder and the muxer. Then one audio-on run limited to 2 CPU cores, as on
       an old dual-core PC, checking it keeps up.
 
-The video FFmpeg and the muxer are the bundled build; the audio encoder is the FFmpeg on PATH, because the
-bundled build only gets Opus/AAC with FFmpeg fk4. Everything is written under build/perf.
+In `live`, every FrameKeep process (video encoder, audio encoder, muxer) is the bundled build, as in the app;
+`codecs` encodes with the FFmpeg on PATH. Everything is written under build/perf.
 """
 
 import argparse, json, os, re, shutil, statistics, subprocess, sys, time
@@ -104,7 +104,7 @@ def child(mode, preset, seconds, out):
     cmd[start:cmd.index("desktop", start) + 1] = ["-re", "-i", measure.SAMPLE]
     if piped:
         codec = engine.audio_codec(cfg["audio_codec"], enc, "mp4")
-        track = audio.AudioTrack(engine.build_audio_cmd(FULL, codec, cfg["quality"]))
+        track = audio.AudioTrack(engine.build_audio_cmd(measure.FFMPEG, codec, cfg["quality"]))
         track.start()
         e = engine.Encoder(cmd, out, "measure", engine.build_mux_cmd(measure.FFMPEG, track.path, out, enc), track)
     else:
@@ -114,7 +114,8 @@ def child(mode, preset, seconds, out):
     e.stop()
 
 def role(proc, me):
-    if proc.pid == me:
+    # a venv's python.exe is a launcher that runs the real interpreter (the app, with the capture threads) as its child
+    if proc.pid == me or proc.name().lower().startswith("python"):
         return "app"
     cmd = " ".join(proc.cmdline())
     if " copy " in cmd:
@@ -224,8 +225,10 @@ def main():
     ap.add_argument("--seconds", type=int, default=60)
     ap.add_argument("--rounds", type=int, default=2)
     args = ap.parse_args()
+    audio_ffmpeg = measure.FFMPEG if args.part == "live" else FULL
     report = {"date": time.strftime("%Y-%m-%d %H:%M"), "cpu_threads": os.cpu_count(),
-              "audio_ffmpeg": subprocess.run([FULL, "-hide_banner", "-version"], capture_output=True, text=True).stdout.split("\n")[0]}
+              "audio_ffmpeg": subprocess.run([audio_ffmpeg, "-hide_banner", "-version"], capture_output=True,
+                                             text=True).stdout.split("\n")[0].split(" Copyright")[0]}
     report |= {"results": codecs()} if args.part == "codecs" else live(args.seconds, args.rounds)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)

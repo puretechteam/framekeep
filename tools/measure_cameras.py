@@ -2,7 +2,7 @@
 # Licensed under the MIT License
 """What cameras cost (dev tool, needs `pip install psutil` and a full FFmpeg on PATH).
 
-  python tools/measure_cameras.py all --out docs/perf/cameras.json [--sample FILE] [--seconds 60]
+  python tools/measure_cameras.py all --out docs/perf/cameras.json [--sample FILE] [--seconds 60] [--ffmpeg ffmpeg/ffmpeg.exe]
 
 The camera sample is a fixed 2-minute 720p MJPEG webcam clip (build/perf/cameras/sample.mkv). If it's missing, it is
 recorded once from the first DirectShow camera (point it at a scene you're happy to keep on disk; it stays in build/,
@@ -24,7 +24,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from framekeep import cameras, config, engine, motion
 
-FULL = shutil.which("ffmpeg")
+FULL = shutil.which("ffmpeg")      # preparing samples and scoring (VMAF): needs a full FFmpeg
+PRODUCT = FULL                     # the camera recordings themselves: --ffmpeg puts FrameKeep's own build here
 OUT = os.path.join(ROOT, "build", "perf", "cameras")
 SAMPLE = os.path.join(OUT, "sample.mkv")
 FORMATS = ("compatible", "smaller", "smallest", "ultra", "lowcpu")
@@ -74,9 +75,9 @@ def run_camera(name, cam, preset, inputs, seconds, container="mkv", affinity=Non
     shutil.rmtree(folder, ignore_errors=True)
     os.makedirs(os.path.join(folder, time.strftime("%Y-%m-%d")))
     cfg = config.validate(dict(config.DEFAULT_CONFIG) | {"chunk_minutes": 60})
-    encoder = engine.FFmpeg(FULL).resolve(preset)[1] if preset else None
+    encoder = engine.FFmpeg(PRODUCT).resolve(preset)[1] if preset else None
     pattern = os.path.join(folder, "%Y-%m-%d", f"%H-%M-%S.{container}")
-    cmd = engine.build_camera_cmd(FULL, cam, cfg, encoder, pattern, inputs)
+    cmd = engine.build_camera_cmd(PRODUCT, cam, cfg, encoder, pattern, inputs)
     m = measure_proc(cmd, seconds, affinity)
     files = [os.path.join(d, f) for d, _, fs in os.walk(folder) for f in fs]
     size = sum(os.path.getsize(f) for f in files)
@@ -92,7 +93,7 @@ def device_cam(**kw):
 def formats(seconds):
     res = {}
     loop = ["-re", "-stream_loop", "-1", "-i", SAMPLE]
-    ff = engine.FFmpeg(FULL)
+    ff = engine.FFmpeg(PRODUCT)
     for preset in FORMATS:
         if ff.resolve(preset)[0] != preset:
             continue
@@ -182,7 +183,7 @@ def quality():
     res = {}
     for name, args in variants.items():
         out = os.path.join(OUT, "q-" + re.sub(r"\W+", "_", name) + ".mkv")
-        p = subprocess.Popen([FULL, "-v", "error", "-y", "-i", ref, "-vf",
+        p = subprocess.Popen([PRODUCT, "-v", "error", "-y", "-i", ref, "-vf",
                               f"{engine.CAMERA_DENOISE},format={engine.output_pix_fmt(args)}", *args, out],
                              stderr=subprocess.DEVNULL)
         ps, peak, cpu = psutil.Process(p.pid), 0, 0
@@ -207,15 +208,19 @@ def main():
     ap.add_argument("--out", default=os.path.join(OUT, "cameras.json"))
     ap.add_argument("--sample")
     ap.add_argument("--seconds", type=int, default=60)
+    ap.add_argument("--ffmpeg", help="ffmpeg.exe that records (for example FrameKeep's bundled build); default: PATH")
     a = ap.parse_args()
-    global SAMPLE
+    global SAMPLE, PRODUCT
+    if a.ffmpeg:
+        PRODUCT = a.ffmpeg
     if a.sample:
         SAMPLE = a.sample
     elif not os.path.exists(SAMPLE):
         record_sample()
     report = json.load(open(a.out)) if os.path.exists(a.out) else {}
-    version = subprocess.run([FULL, "-hide_banner", "-version"], capture_output=True, text=True).stdout.splitlines()[0]
-    report["machine"] = {"cpus": os.cpu_count(), "ffmpeg": version.split(" Copyright")[0]}   # never the path (user name)
+    def version(ff):     # the version line, never the path (it holds the user name)
+        return subprocess.run([ff, "-hide_banner", "-version"], capture_output=True, text=True).stdout.splitlines()[0].split(" Copyright")[0]
+    report["machine"] = {"cpus": os.cpu_count(), "ffmpeg": version(PRODUCT), "helpers": version(FULL)}
     report["sample"] = "2-minute 720p MJPEG webcam clip, still indoor scene, played in real time and looped"
     parts = ("formats", "copy", "motion", "station", "quality") if a.part == "all" else (a.part,)
     for part in parts:

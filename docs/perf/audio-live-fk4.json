@@ -1,0 +1,327 @@
+{
+  "date": "2026-10-30 22:37",
+  "cpu_threads": 16,
+  "audio_ffmpeg": "ffmpeg version 9.0.2-FrameKeep-fk4",
+  "seconds": 60,
+  "rounds": 2,
+  "summary": {
+    "compatible": {
+      "off": {
+        "app": {
+          "cpu_percent": 0.0,
+          "private_mb": 16.7
+        },
+        "audio encoder": {
+          "cpu_percent": 0.0,
+          "private_mb": 0.0
+        },
+        "mux": {
+          "cpu_percent": 0.0,
+          "private_mb": 0.0
+        },
+        "video": {
+          "cpu_percent": 0.715,
+          "private_mb": 218.55
+        }
+      },
+      "on": {
+        "app": {
+          "cpu_percent": 0.012,
+          "private_mb": 18.3
+        },
+        "audio encoder": {
+          "cpu_percent": 0.087,
+          "private_mb": 9.1
+        },
+        "mux": {
+          "cpu_percent": 0.0,
+          "private_mb": 9.4
+        },
+        "video": {
+          "cpu_percent": 0.689,
+          "private_mb": 220.6
+        }
+      },
+      "audio": {
+        "codec": "aac",
+        "duration": 60.041833,
+        "kbps": 106.0
+      }
+    },
+    "smallest": {
+      "off": {
+        "app": {
+          "cpu_percent": 0.0,
+          "private_mb": 16.5
+        },
+        "audio encoder": {
+          "cpu_percent": 0.0,
+          "private_mb": 0.0
+        },
+        "mux": {
+          "cpu_percent": 0.0,
+          "private_mb": 0.0
+        },
+        "video": {
+          "cpu_percent": 0.751,
+          "private_mb": 391.55
+        }
+      },
+      "on": {
+        "app": {
+          "cpu_percent": 0.011,
+          "private_mb": 17.9
+        },
+        "audio encoder": {
+          "cpu_percent": 0.067,
+          "private_mb": 8.4
+        },
+        "mux": {
+          "cpu_percent": 0.002,
+          "private_mb": 8.0
+        },
+        "video": {
+          "cpu_percent": 0.775,
+          "private_mb": 394.8
+        }
+      },
+      "audio": {
+        "codec": "opus",
+        "duration": 60.029,
+        "kbps": 19.3
+      }
+    }
+  },
+  "two_cores": {
+    "app": {
+      "cpu_percent": 0.013,
+      "private_mb": 17.8
+    },
+    "audio encoder": {
+      "cpu_percent": 0.054,
+      "private_mb": 7.9
+    },
+    "video": {
+      "cpu_percent": 0.842,
+      "private_mb": 282.5
+    },
+    "mux": {
+      "cpu_percent": 0.004,
+      "private_mb": 8.0
+    },
+    "file": {
+      "video": {
+        "codec": "av1",
+        "duration": 60.8,
+        "kbps": 62.2
+      },
+      "audio": {
+        "codec": "opus",
+        "duration": 60.05,
+        "kbps": 32.1
+      }
+    }
+  },
+  "runs": {
+    "compatible": {
+      "off": [
+        {
+          "app": {
+            "cpu_percent": 0.0,
+            "private_mb": 16.8
+          },
+          "video": {
+            "cpu_percent": 0.702,
+            "private_mb": 218.4
+          },
+          "file": {
+            "video": {
+              "codec": "h264",
+              "duration": 60.6,
+              "kbps": 116.6
+            }
+          }
+        },
+        {
+          "app": {
+            "cpu_percent": 0.0,
+            "private_mb": 16.6
+          },
+          "video": {
+            "cpu_percent": 0.728,
+            "private_mb": 218.7
+          },
+          "file": {
+            "video": {
+              "codec": "h264",
+              "duration": 60.6,
+              "kbps": 116.6
+            }
+          }
+        }
+      ],
+      "on": [
+        {
+          "app": {
+            "cpu_percent": 0.011,
+            "private_mb": 18.5
+          },
+          "audio encoder": {
+            "cpu_percent": 0.099,
+            "private_mb": 9.1
+          },
+          "video": {
+            "cpu_percent": 0.717,
+            "private_mb": 220.8
+          },
+          "mux": {
+            "cpu_percent": 0.0,
+            "private_mb": 9.2
+          },
+          "file": {
+            "video": {
+              "codec": "h264",
+              "duration": 60.6,
+              "kbps": 116.6
+            },
+            "audio": {
+              "codec": "aac",
+              "duration": 60.041833,
+              "kbps": 106.0
+            }
+          }
+        },
+        {
+          "app": {
+            "cpu_percent": 0.013,
+            "private_mb": 18.1
+          },
+          "audio encoder": {
+            "cpu_percent": 0.075,
+            "private_mb": 9.1
+          },
+          "video": {
+            "cpu_percent": 0.661,
+            "private_mb": 220.4
+          },
+          "mux": {
+            "cpu_percent": 0.0,
+            "private_mb": 9.6
+          },
+          "file": {
+            "video": {
+              "codec": "h264",
+              "duration": 60.8,
+              "kbps": 116.4
+            },
+            "audio": {
+              "codec": "aac",
+              "duration": 60.039833,
+              "kbps": 110.2
+            }
+          }
+        }
+      ]
+    },
+    "smallest": {
+      "off": [
+        {
+          "app": {
+            "cpu_percent": 0.0,
+            "private_mb": 16.6
+          },
+          "video": {
+            "cpu_percent": 0.719,
+            "private_mb": 394.0
+          },
+          "file": {
+            "video": {
+              "codec": "av1",
+              "duration": 60.6,
+              "kbps": 61.9
+            }
+          }
+        },
+        {
+          "app": {
+            "cpu_percent": 0.0,
+            "private_mb": 16.4
+          },
+          "video": {
+            "cpu_percent": 0.783,
+            "private_mb": 389.1
+          },
+          "file": {
+            "video": {
+              "codec": "av1",
+              "duration": 60.6,
+              "kbps": 61.9
+            }
+          }
+        }
+      ],
+      "on": [
+        {
+          "app": {
+            "cpu_percent": 0.009,
+            "private_mb": 18.0
+          },
+          "audio encoder": {
+            "cpu_percent": 0.054,
+            "private_mb": 8.4
+          },
+          "video": {
+            "cpu_percent": 0.762,
+            "private_mb": 393.4
+          },
+          "mux": {
+            "cpu_percent": 0.0,
+            "private_mb": 8.0
+          },
+          "file": {
+            "video": {
+              "codec": "av1",
+              "duration": 60.6,
+              "kbps": 61.9
+            },
+            "audio": {
+              "codec": "opus",
+              "duration": 60.029,
+              "kbps": 19.3
+            }
+          }
+        },
+        {
+          "app": {
+            "cpu_percent": 0.013,
+            "private_mb": 17.8
+          },
+          "audio encoder": {
+            "cpu_percent": 0.079,
+            "private_mb": 8.4
+          },
+          "video": {
+            "cpu_percent": 0.788,
+            "private_mb": 396.2
+          },
+          "mux": {
+            "cpu_percent": 0.004,
+            "private_mb": 8.0
+          },
+          "file": {
+            "video": {
+              "codec": "av1",
+              "duration": 60.6,
+              "kbps": 61.9
+            },
+            "audio": {
+              "codec": "opus",
+              "duration": 60.028,
+              "kbps": 42.3
+            }
+          }
+        }
+      ]
+    }
+  }
+}

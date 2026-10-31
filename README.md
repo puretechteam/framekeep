@@ -33,7 +33,8 @@ tables (and how to reproduce them) are in [docs/perf](docs/perf/README.md).
   timeline so you can jump straight to it. Cameras run separately from desktop recording, so you can pause your
   own webcam for a call from the tray or a hotkey, or have it pause by itself while Zoom is open. See
   [Cameras](#cameras). Measured on a 720p webcam sample at 15 FPS: 86 MB per hour in AV1, 2.2% of the PC's CPU
-  and 311 MB of memory per camera, and three cameras at once kept real time even on 2 CPU cores.
+  and 311 MB of memory per camera, and three cameras at once kept real time even on 2 CPU cores (on a still scene;
+  with constant movement in view, 2 cores fell about 5 s behind per minute).
 
 - **The FrameKeep player.** Play now opens FrameKeep's own player instead of ffplay: a whole day as one timeline
   across files, the desktop and up to three cameras side by side in sync, motion marks, 0.25x to 16x, frame stepping
@@ -132,7 +133,7 @@ If you need files that open everywhere with no fuss, pick **Compatible** (H.264)
 - Any quad-core CPU from roughly the last 10 years. Dual-cores over 2 GHz work with the lighter formats.
 - 4 GB RAM (8 GB recommended for Ultra). While recording, FrameKeep itself uses about 40 MB and the FFmpeg encoder
   roughly 250 MB (H.264), 430 MB (AV1) or 560 MB (H.266), measured as private memory on a 1080p display
-  ([details](docs/perf/README.md)). Desktop audio, if you turn it on, adds about 18 MB and well under 1% CPU.
+  ([details](docs/perf/README.md)). Desktop audio, if you turn it on, adds about 21 MB and well under 1% CPU.
   Each camera at 720p 15 FPS in AV1 adds about 310 MB and 2% CPU (of a 16-thread PC); a network camera kept as-is
   about 85 MB and almost no CPU.
   The dashboard's **Using now** tile shows your own numbers.

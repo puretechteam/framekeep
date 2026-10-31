@@ -26,12 +26,13 @@ Default settings throughout: Balanced quality, 50% downscale (960×540), 5 FPS, 
 | H.266 frames shown at the wrong time (3.0's FFmpeg) | 332 of 398 | 0 of 398 | **fixed** |
 
 New in 3.1: [cameras](#cameras-new-in-31). On a 720p webcam sample at 15 FPS, a camera recorded in AV1 takes 86 MB per
-hour, 2.2% of the PC's CPU and 311 MB of memory; three at once kept real time even limited to 2 CPU cores. A network
+hour, 2.2% of the PC's CPU and 311 MB of memory; three at once kept real time even limited to 2 CPU cores (on that still
+scene; one with constant movement fell about 5 s behind per minute on 2 cores). A network
 camera's own stream, kept as-is, costs 0.04% CPU. Motion detection found every test movement at the default
 sensitivity, with no false events, for 0.05% of one core.
 
 Also new in 3.1: [desktop audio](#desktop-audio-new-in-31), off by default. Turned on, Opus at Balanced added 0.10% of
-the PC's CPU and about 18 MB of memory (17.6 MB with the bundled fk4 audio encoder; 30.4 MB with a full FFmpeg's). The video encoder's CPU
+the PC's CPU and 21.1 MB of memory with the bundled fk4 (30.4 MB when the audio encoder was a full FFmpeg). The video encoder's CPU
 didn't change. On a test mix that's a third tones, a third speech-like noise and a third silence, the sound took
 19.5 MB per hour.
 
@@ -211,7 +212,7 @@ is an upper bound.
 - **Compatible (H.264) + AAC 128k:** audio adds +0.070% CPU and +37.9 MB in total; the audio track averaged 71.5 kbps on the looping clip.
 - **Smallest (AV1) + Opus 48k:** audio adds +0.100% CPU and +30.4 MB in total; the audio track averaged 25.8 kbps on the looping clip.
 
-Video encoder CPU is the same within run-to-run noise. Its memory rose 6 MB for H.264 when writing to the pipe, and 0.2 MB for AV1. The audio encoder above was the full FFmpeg. Measured again with the bundled fk4 (`tools/measure_audio.py`'s fixed sound encoded live for 20 s, peak private memory, median of 5): Opus 48k 8.9 MB against 21.7 MB, AAC 128k 9.6 MB against 22.4 MB. So with FrameKeep's own FFmpeg, audio adds 17.6 MB in total with Opus and 25.1 MB with AAC.
+Video encoder CPU is the same within run-to-run noise. Its memory rose 6 MB for H.264 when writing to the pipe, and 0.2 MB for AV1. The audio encoder above was the full FFmpeg. With the bundled fk4 for every process, as in the app (same tool, same rounds, raw data in [audio-live-fk4.json](audio-live-fk4.json)): Smallest + Opus adds +0.104% CPU and +21.1 MB (encoder 8.4, muxer 8.0, the app's capture 1.4, video encoder +3.3), Compatible + AAC +0.073% CPU and +22.1 MB. Limited to 2 cores it still kept up: 60.8 s of video and 60.05 s of audio from 60 s, 0.91% CPU in total. The fk4 encoder alone, encoding the fixed sound: Opus 48k 8.9 MB against 21.7 MB for a full FFmpeg, AAC 128k 9.6 MB against 22.4 MB.
 
 **Limited to 2 CPU cores** (Smallest + Opus, everything pinned to 2 logical CPUs, like an old dual-core): video 60.8 s and audio 60.049 s from a 60 s recording, total CPU 0.91% of this 16-thread PC.
 
@@ -351,7 +352,8 @@ Kept as-is, FFmpeg only decodes keyframes for motion detection and the live tile
 
 Three AV1 cameras recording the sample at the same time used 8.1% of the PC's CPU and 932 MB in total, and each kept
 real time (60.9 s recorded in 60 s). Limited to 2 CPU cores, as on an old dual-core PC: 8.8% (of all 16 threads, so
-about 70% of the two cores) and every camera still recorded 60.9-61.0 s in 60 s.
+about 70% of the two cores) and every camera still recorded 60.9-61.0 s in 60 s. A scene with constant movement is
+harder: see [With FrameKeep's own FFmpeg](#with-framekeeps-own-ffmpeg-fk4).
 
 ### Motion detection
 
@@ -384,6 +386,35 @@ per frame in Python: about 0.05% of one CPU core per camera.
   input, which FFmpeg doesn't hold back: a 20 s AV1 test kept all 20 s of audio (977 packets) with no buffer warnings.
 - **A webcam serves one program at a time.** With FFmpeg recording it, a second program opening it got "device
   already in use". That's why FrameKeep can pause a camera from the tray, a hotkey or while chosen apps run.
+
+### With FrameKeep's own FFmpeg (fk4)
+
+The numbers above were recorded with a full FFmpeg. Once the bundled 9.0.2-fk4 was built, every recording part was
+run again through it and, right after, through the full FFmpeg, on the same new sample, same PC, pinned to 12 of 16
+threads. The first sample (a still scene) had been deleted for privacy, and the new one has movement throughout (frame
+difference median 4.6, where a still scene measures about 1 to 2), so its files are much bigger than the ones above.
+Compare the two columns with each other, not with the tables above. Raw data: [cameras-fk4.json](cameras-fk4.json).
+
+| 720p 15 FPS, 60 s live | MB/hr, fk4 / full | CPU of the PC, fk4 / full | Memory, fk4 / full | Recorded of 60 s, fk4 / full |
+|---|---|---|---|---|
+| Smallest (AV1) | 526.8 / 526.3 | 3.14% / 3.15% | 298 / 310 MB | 60.7 / 60.8 s |
+| Compatible (H.264) | 2,091 / 2,092 | 11.2% / 11.4% | 140 / 153 MB | 61.1 / 60.9 s |
+| Smaller (H.265) | 1,441 / 1,407 | 10.9% / 9.7% | 422 / 433 MB | **40.8** / 60.9 s |
+| Low CPU (NVENC AV1) | 1,909 / 1,909 | 0.75% / 0.50% | 577 / 590 MB | 60.7 / 60.8 s |
+| Network camera kept as-is | 1,813 / 1,814 | 0.05% / 0.07% | 62 / 75 MB | 61.3 / 61.3 s |
+| Network camera made smaller | 198 / 198 | 2.99% / 3.26% | 413 / 425 MB | 61.1 / 61.1 s |
+| Three AV1 cameras | | 11.6% / 11.2% | 894 / 929 MB | 60.7 / 60.9 s each |
+| Three AV1 cameras on 2 cores | | 11.9% / 11.8% | 897 / 931 MB | 52.7-55.5 / 54.0-54.7 s |
+
+- **Same files and quality.** Offline, all 13 codec settings gave the same size within 0.4% and the same VMAF within
+  0.02 on both builds (for example AV1 Balanced 351.3 / 350.1 MB/hr at 88.69 / 88.70).
+- **Less memory.** fk4's smaller libraries save 10 to 15 MB per camera.
+- **H.265 is the one difference.** fk4's H.265 fell behind real time in the first run (40.8 s of 60). Repeated, it
+  recorded 58.3 s and 60.7 s, against 60.9 s every time for the full FFmpeg. AV1, FrameKeep's camera default, kept
+  real time in every run on both.
+- **This busy scene is harder:** three AV1 cameras limited to 2 cores fell about 5 s behind per minute on both builds,
+  where the still scene kept up. On a 2-core PC with cameras that see constant movement, use fewer cameras or a
+  lower frame rate.
 
 ## Tray (new in 3.1)
 

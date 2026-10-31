@@ -1,0 +1,439 @@
+{
+ "note": "fk4 (FrameKeep's bundled FFmpeg) against a full FFmpeg on the same sample, same PC, run one after the other, pinned to 12 of 16 threads. Motion isn't compared: it doesn't depend on the FFmpeg build, and this sample isn't a still scene.",
+ "fk4": {
+  "machine": {
+   "cpus": 16,
+   "ffmpeg": "ffmpeg version 9.0.2-FrameKeep-fk4",
+   "helpers": "ffmpeg version 9.0.1-full_build-www.gyan.dev"
+  },
+  "sample": "a second 2-minute 720p MJPEG webcam clip with movement throughout (frame difference YDIF median 4.6, against about 1-2 for a still scene), played in real time and looped",
+  "formats": {
+   "compatible": {
+    "cpu_percent": 11.2,
+    "cpu_percent_of_one_core": 179.3,
+    "private_mb": 139.6,
+    "wall_s": 60.0,
+    "encoder": "libx264",
+    "recorded_s": 61.1,
+    "mb_per_hour": 2091.4
+   },
+   "smaller": {
+    "cpu_percent": 10.93,
+    "cpu_percent_of_one_core": 174.9,
+    "private_mb": 422.1,
+    "wall_s": 60.0,
+    "encoder": "libx265",
+    "recorded_s": 40.8,
+    "mb_per_hour": 1441.4
+   },
+   "smallest": {
+    "cpu_percent": 3.14,
+    "cpu_percent_of_one_core": 50.3,
+    "private_mb": 298.1,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.7,
+    "mb_per_hour": 526.8
+   },
+   "ultra": {
+    "cpu_percent": 18.58,
+    "cpu_percent_of_one_core": 297.3,
+    "private_mb": 674.1,
+    "wall_s": 60.0,
+    "encoder": "libvvenc",
+    "recorded_s": 32.7,
+    "mb_per_hour": 1817.4
+   },
+   "lowcpu": {
+    "cpu_percent": 0.75,
+    "cpu_percent_of_one_core": 12.0,
+    "private_mb": 576.8,
+    "wall_s": 60.0,
+    "encoder": "av1_nvenc",
+    "recorded_s": 60.7,
+    "mb_per_hour": 1909.2
+   },
+   "smallest, no denoise": {
+    "cpu_percent": 2.82,
+    "cpu_percent_of_one_core": 45.1,
+    "private_mb": 295.4,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.7,
+    "mb_per_hour": 530.4
+   },
+   "smallest, quiet saver": {
+    "cpu_percent": 3.21,
+    "cpu_percent_of_one_core": 51.4,
+    "private_mb": 298.4,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.8,
+    "mb_per_hour": 526.6
+   },
+   "smallest, timestamp": {
+    "cpu_percent": 3.11,
+    "cpu_percent_of_one_core": 49.8,
+    "private_mb": 300.3,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.7,
+    "mb_per_hour": 527.9
+   }
+  },
+  "copy": {
+   "copy (camera's own stream)": {
+    "cpu_percent": 0.05,
+    "cpu_percent_of_one_core": 0.8,
+    "private_mb": 61.8,
+    "wall_s": 60.0,
+    "encoder": "copy",
+    "recorded_s": 61.3,
+    "mb_per_hour": 1812.7
+   },
+   "make smaller (smallest)": {
+    "cpu_percent": 2.99,
+    "cpu_percent_of_one_core": 47.9,
+    "private_mb": 413.2,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 61.1,
+    "mb_per_hour": 198.1
+   }
+  },
+  "station": {
+   "3 cameras": {
+    "cpu_percent": 11.57,
+    "private_mb": 894.1,
+    "recorded_s": [
+     60.7,
+     60.7,
+     60.7
+    ],
+    "wall_s": [
+     60.0,
+     60.0,
+     60.0
+    ]
+   },
+   "3 cameras on 2 cores": {
+    "cpu_percent": 11.93,
+    "private_mb": 896.7,
+    "recorded_s": [
+     55.5,
+     52.7,
+     54.8
+    ],
+    "wall_s": [
+     60.0,
+     60.0,
+     60.0
+    ]
+   }
+  },
+  "quality": {
+   "libx264 high": {
+    "mb_per_hour": 3198.6,
+    "peak_mb": 188,
+    "cpu_s": 158.8,
+    "vmaf": 96.48
+   },
+   "libx265 high": {
+    "mb_per_hour": 2162.4,
+    "peak_mb": 467,
+    "cpu_s": 145.3,
+    "vmaf": 95.17
+   },
+   "libsvtav1 high": {
+    "mb_per_hour": 1017.9,
+    "peak_mb": 350,
+    "cpu_s": 51.8,
+    "vmaf": 91.38
+   },
+   "libx264 balanced": {
+    "mb_per_hour": 1869.3,
+    "peak_mb": 183,
+    "cpu_s": 116.9,
+    "vmaf": 93.99
+   },
+   "libx265 balanced": {
+    "mb_per_hour": 1188.4,
+    "peak_mb": 469,
+    "cpu_s": 160.0,
+    "vmaf": 92.19
+   },
+   "libsvtav1 balanced": {
+    "mb_per_hour": 351.3,
+    "peak_mb": 354,
+    "cpu_s": 50.0,
+    "vmaf": 88.69
+   },
+   "libx264 saver": {
+    "mb_per_hour": 856.0,
+    "peak_mb": 182,
+    "cpu_s": 78.4,
+    "vmaf": 90.26
+   },
+   "libx265 saver": {
+    "mb_per_hour": 519.3,
+    "peak_mb": 464,
+    "cpu_s": 102.9,
+    "vmaf": 88.2
+   },
+   "libsvtav1 saver": {
+    "mb_per_hour": 150.8,
+    "peak_mb": 353,
+    "cpu_s": 45.8,
+    "vmaf": 86.87
+   },
+   "libsvtav1 balanced, 4 levels": {
+    "mb_per_hour": 463.7,
+    "peak_mb": 444,
+    "cpu_s": 46.5,
+    "vmaf": 89.19
+   },
+   "libsvtav1 balanced, 2 levels": {
+    "mb_per_hour": 390.0,
+    "peak_mb": 292,
+    "cpu_s": 51.0,
+    "vmaf": 89.06
+   },
+   "libsvtav1 balanced, low delay": {
+    "mb_per_hour": 616.7,
+    "peak_mb": 187,
+    "cpu_s": 55.7,
+    "vmaf": 89.06
+   },
+   "libsvtav1 balanced, lookahead 0": {
+    "mb_per_hour": 598.9,
+    "peak_mb": 294,
+    "cpu_s": 49.4,
+    "vmaf": 90.05
+   }
+  }
+ },
+ "full": {
+  "machine": {
+   "cpus": 16,
+   "ffmpeg": "ffmpeg version 9.0.1-full_build-www.gyan.dev",
+   "helpers": "ffmpeg version 9.0.1-full_build-www.gyan.dev"
+  },
+  "sample": "a second 2-minute 720p MJPEG webcam clip with movement throughout (frame difference YDIF median 4.6, against about 1-2 for a still scene), played in real time and looped",
+  "formats": {
+   "compatible": {
+    "cpu_percent": 11.41,
+    "cpu_percent_of_one_core": 182.6,
+    "private_mb": 153.2,
+    "wall_s": 60.0,
+    "encoder": "libx264",
+    "recorded_s": 60.9,
+    "mb_per_hour": 2091.6
+   },
+   "smaller": {
+    "cpu_percent": 9.68,
+    "cpu_percent_of_one_core": 154.8,
+    "private_mb": 433.3,
+    "wall_s": 60.0,
+    "encoder": "libx265",
+    "recorded_s": 60.9,
+    "mb_per_hour": 1406.6
+   },
+   "smallest": {
+    "cpu_percent": 3.15,
+    "cpu_percent_of_one_core": 50.4,
+    "private_mb": 309.8,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.8,
+    "mb_per_hour": 526.3
+   },
+   "ultra": {
+    "cpu_percent": 18.47,
+    "cpu_percent_of_one_core": 295.5,
+    "private_mb": 687.8,
+    "wall_s": 60.0,
+    "encoder": "libvvenc",
+    "recorded_s": 31.9,
+    "mb_per_hour": 1812.2
+   },
+   "lowcpu": {
+    "cpu_percent": 0.5,
+    "cpu_percent_of_one_core": 8.1,
+    "private_mb": 590.4,
+    "wall_s": 60.0,
+    "encoder": "av1_nvenc",
+    "recorded_s": 60.8,
+    "mb_per_hour": 1909.2
+   },
+   "smallest, no denoise": {
+    "cpu_percent": 2.84,
+    "cpu_percent_of_one_core": 45.4,
+    "private_mb": 307.9,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.9,
+    "mb_per_hour": 530.5
+   },
+   "smallest, quiet saver": {
+    "cpu_percent": 3.05,
+    "cpu_percent_of_one_core": 48.9,
+    "private_mb": 310.7,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.8,
+    "mb_per_hour": 526.3
+   },
+   "smallest, timestamp": {
+    "cpu_percent": 3.0,
+    "cpu_percent_of_one_core": 47.9,
+    "private_mb": 311.2,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 60.8,
+    "mb_per_hour": 527.6
+   }
+  },
+  "copy": {
+   "copy (camera's own stream)": {
+    "cpu_percent": 0.07,
+    "cpu_percent_of_one_core": 1.1,
+    "private_mb": 74.5,
+    "wall_s": 60.0,
+    "encoder": "copy",
+    "recorded_s": 61.3,
+    "mb_per_hour": 1814.4
+   },
+   "make smaller (smallest)": {
+    "cpu_percent": 3.26,
+    "cpu_percent_of_one_core": 52.2,
+    "private_mb": 425.4,
+    "wall_s": 60.0,
+    "encoder": "libsvtav1",
+    "recorded_s": 61.1,
+    "mb_per_hour": 197.8
+   }
+  },
+  "station": {
+   "3 cameras": {
+    "cpu_percent": 11.17,
+    "private_mb": 929.3,
+    "recorded_s": [
+     60.9,
+     60.9,
+     60.9
+    ],
+    "wall_s": [
+     60.0,
+     60.0,
+     60.0
+    ]
+   },
+   "3 cameras on 2 cores": {
+    "cpu_percent": 11.75,
+    "private_mb": 931.1,
+    "recorded_s": [
+     54.2,
+     54.7,
+     54.0
+    ],
+    "wall_s": [
+     60.0,
+     60.0,
+     60.0
+    ]
+   }
+  },
+  "quality": {
+   "libx264 high": {
+    "mb_per_hour": 3198.6,
+    "peak_mb": 202,
+    "cpu_s": 159.0,
+    "vmaf": 96.48
+   },
+   "libx265 high": {
+    "mb_per_hour": 2162.4,
+    "peak_mb": 479,
+    "cpu_s": 217.7,
+    "vmaf": 95.17
+   },
+   "libsvtav1 high": {
+    "mb_per_hour": 1017.4,
+    "peak_mb": 372,
+    "cpu_s": 48.4,
+    "vmaf": 91.4
+   },
+   "libx264 balanced": {
+    "mb_per_hour": 1869.3,
+    "peak_mb": 196,
+    "cpu_s": 116.8,
+    "vmaf": 93.99
+   },
+   "libx265 balanced": {
+    "mb_per_hour": 1188.4,
+    "peak_mb": 477,
+    "cpu_s": 158.1,
+    "vmaf": 92.19
+   },
+   "libsvtav1 balanced": {
+    "mb_per_hour": 350.1,
+    "peak_mb": 364,
+    "cpu_s": 49.9,
+    "vmaf": 88.7
+   },
+   "libx264 saver": {
+    "mb_per_hour": 856.0,
+    "peak_mb": 194,
+    "cpu_s": 82.4,
+    "vmaf": 90.26
+   },
+   "libx265 saver": {
+    "mb_per_hour": 519.3,
+    "peak_mb": 476,
+    "cpu_s": 78.6,
+    "vmaf": 88.2
+   },
+   "libsvtav1 saver": {
+    "mb_per_hour": 150.8,
+    "peak_mb": 368,
+    "cpu_s": 42.9,
+    "vmaf": 86.86
+   },
+   "libsvtav1 balanced, 4 levels": {
+    "mb_per_hour": 464.1,
+    "peak_mb": 454,
+    "cpu_s": 43.8,
+    "vmaf": 89.21
+   },
+   "libsvtav1 balanced, 2 levels": {
+    "mb_per_hour": 388.6,
+    "peak_mb": 309,
+    "cpu_s": 48.0,
+    "vmaf": 89.06
+   },
+   "libsvtav1 balanced, low delay": {
+    "mb_per_hour": 614.9,
+    "peak_mb": 193,
+    "cpu_s": 48.1,
+    "vmaf": 89.06
+   },
+   "libsvtav1 balanced, lookahead 0": {
+    "mb_per_hour": 599.4,
+    "peak_mb": 308,
+    "cpu_s": 45.6,
+    "vmaf": 90.05
+   }
+  }
+ },
+ "h265_repeats_recorded_s": {
+  "fk4": [
+   40.8,
+   58.3,
+   60.7
+  ],
+  "full": [
+   60.9,
+   60.9,
+   60.9
+  ]
+ }
+}
