@@ -96,7 +96,8 @@ fi
 #   capture   lavfi ddagrab (D3D11) or gdigrab, testsrc2 for the encoder self-test
 #   cameras   dshow (webcams, capture cards, phone webcam apps, their mics), RTSP and HTTP MJPEG network cameras
 #             (TLS through Windows' own schannel), copied as-is or decoded; split/hqdn3d/drawtext for the recording
-#             and the small raw analysis stream FrameKeep reads for motion; segment for gap-free chunks
+#             and the small raw analysis stream FrameKeep reads for motion (pad letterboxes it); segment for
+#             gap-free chunks
 #   filters   hwdownload format mpdecimate scale setpts trim fps null libvmaf (benchmark), aresample
 #   encoders  x264 x265 SVT-AV1 aom VVenC, NVENC/QSV/AMF, ffv1 (benchmark sample), mjpeg (thumbnails),
 #             Opus and AAC (desktop audio; AAC also for share copies)
@@ -105,7 +106,8 @@ fi
 #   files     mp4/mov, matroska, null, image2 (thumbnail .jpg), f32le (raw desktop audio from FrameKeep),
 #             rawvideo (camera analysis frames and the player's frames)
 #   player    concat (one decoder walks a day's chunks, its script read from stdin, which FFmpeg 9 opens through the
-#             fd protocol), showinfo (frame times), atempo (sound at 0.25x-2x), pcm_f32le out (sound to WASAPI).
+#             fd protocol), select (thins frames from 4x), showinfo (frame times), atempo (sound at 0.25x-2x),
+#             pcm_f32le out (sound to WASAPI).
 #             ffplay and SDL2 are not built: FrameKeep has its own player.
 # The ffmpeg program pulls in the few extra filters they insert themselves (crop, transpose, ...).
 ENCODERS=libx264,libx265,libsvtav1,libaom_av1,libvvenc
@@ -115,8 +117,8 @@ DECODERS=h264,hevc,vvc,libdav1d,ffv1,rawvideo,mjpeg,wrapped_avframe,bmp   # lavf
 DECODERS+=,opus,aac,pcm_f32le,pcm_s16le,pcm_mulaw,pcm_alaw   # camera mics, G.711 network audio
 FILTERS=ddagrab,testsrc2,hwdownload,format,mpdecimate,scale,setpts,trim,fps,null,copy,libvmaf
 FILTERS+=,aresample,aformat,anull,atrim,asetpts   # aresample converts float to AAC's planar float
-FILTERS+=,split,hqdn3d,drawtext
-FILTERS+=,showinfo,atempo   # the FrameKeep player
+FILTERS+=,split,hqdn3d,drawtext,pad   # cameras
+FILTERS+=,select,showinfo,atempo   # the FrameKeep player
 PARSERS=h264,hevc,vvc,av1,mjpeg,opus,aac
 BSFS=extract_extradata,h264_mp4toannexb,hevc_mp4toannexb,vvc_mp4toannexb,av1_frame_split,av1_frame_merge,aac_adtstoasc
 MUXERS=mp4,mov,matroska,webm,null,image2,rawvideo,segment,pcm_f32le
