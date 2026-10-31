@@ -1,4 +1,4 @@
 customtkinter==5.2.2
 puretech-tray @ https://github.com/puretechteam/puretech-tray/archive/refs/tags/v0.1.0.zip
-puretech-player @ https://github.com/puretechteam/puretech-player/archive/refs/tags/v0.1.0.zip
+puretech-player @ https://github.com/puretechteam/puretech-player/archive/refs/tags/v0.1.1.zip
 pillow>=10.4.0

@@ -2,6 +2,12 @@ FrameKeep - (C) 2025 Pure Tech
 
 Licensed under the MIT License - see LICENSE file for details (v2.1.0 and earlier were released under GPLv3)
 
+Unreleased
+#
+Changed
+- The player now uses puretech-player 0.1.1, which keeps its clock on the frame you stepped to, so FrameKeep's own workaround for that is gone. Stepping and playing behave as before (tested: back one frame moves exactly 0.2 s at 5 FPS, and play continues from the stepped frame).
+#
+
 v3.1.0 Changelog (2026-10-30)
 #
 Efficiency (every number measured against 3.0.0 on the same PC, FFmpeg and sample; tables, raw data and the commands to reproduce them are in docs/perf)

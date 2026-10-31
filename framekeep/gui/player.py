@@ -38,7 +38,6 @@ class PlayerWindow(ctk.CTkToplevel):
         self.mark_in = self.mark_out = None
         self.events, self.lanes = [], []    # motion events; (name, color, [(start, end)]) per selected source
         self.zoom_day = False               # the bar fits the footage; the zoom button shows the whole day
-        self._stepped = False               # paused on a stepped frame: the grid's clock is behind it
         self._closed = False
         self._build()
         self._bind_keys()
@@ -180,7 +179,6 @@ class PlayerWindow(ctk.CTkToplevel):
     def _open(self, at):
         """(Re)build the tiles and the engine for the selected sources and day, then play from `at`."""
         self._close_engine()
-        self._stepped = False
         for w in self.stage.winfo_children():
             if w is not self.empty:
                 w.destroy()
@@ -306,11 +304,8 @@ class PlayerWindow(ctk.CTkToplevel):
 
     # ---- transport ---------------------------------------------------------------------------------------------
     def position(self):
-        """Wall time on screen: the shared clock, or after a frame step the main tile's frame (the grid's clock
-        stays where it was paused)."""
-        if not self.engine:
-            return None
-        return self.engine.players[0].position if self._stepped else self.engine.position
+        """Wall time on screen (the grid's shared clock, which follows frame steps too)."""
+        return self.engine.position if self.engine else None
 
     def toggle(self):
         if not self.engine:
@@ -318,13 +313,10 @@ class PlayerWindow(ctk.CTkToplevel):
         if any(p.playing for p in self.engine.players):
             self.engine.pause()
         else:
-            if self._stepped:
-                self.seek(self.position())    # carry on from the stepped frame, not from where the clock stopped
             self.engine.play()
 
     def seek(self, t):
         if self.engine:
-            self._stepped = False
             self.engine.seek(t)
 
     def nudge(self, seconds):
@@ -333,7 +325,6 @@ class PlayerWindow(ctk.CTkToplevel):
 
     def step(self, direction):
         if self.engine:
-            self._stepped = True
             self.engine.step(direction)
 
     def set_speed(self, speed):
